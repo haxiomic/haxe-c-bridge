@@ -1,0 +1,5 @@
+{
+	"name": "haxe-embed",
+	"version": "0.0.0",
+	"description": "Easily embed a haxe program within a native application via a C message passing interface"
+}
