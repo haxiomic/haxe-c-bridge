@@ -1,3 +1,4 @@
+import cpp.Native;
 import cpp.Callable;
 import cpp.Function;
 import cpp.RawPointer;
@@ -22,13 +23,16 @@ import cpp.Star;
 /**/
 class HaxeProgram {
 
-	static var num = 0;
+	// demonstrating static vars are lost if the haxe thread is shutdown
+	static var incrementingStaticVar = 0;
 	static var loopCount = 0;
-	static var nativeCallback: cpp.Callable<() -> Void> = new Callable(null);
-	static var x: Star<cpp.Void> = null;
+	static var nativeCallback: cpp.Callable<Int -> Void> = new Callable(null);
+
+	// number is set from native code by sending a message with type 'NUMBER'
+	static var number: Int = -1;
 
 	static function main() {
-		trace('haxe main() ${num++} $nativeCallback');
+		trace('haxe main() incrementing static var: ${incrementingStaticVar++}');
 
 		// register a callback to receive messages from native calls
 		HaxeEmbed.setMessageHandler(onMessage);
@@ -41,7 +45,7 @@ class HaxeProgram {
 		function loop() {
 			trace('loop $loopCount $nativeCallback');
 			if (nativeCallback != null) {
-				nativeCallback();
+				nativeCallback(number);
 			}
 			loopCount++;
 			Timer.delay(loop, 500);
@@ -49,20 +53,24 @@ class HaxeProgram {
 		loop();
 	}
 	
-	static final retStr = 'string from haxe!';
+	static final messageReply = 'string from haxe!';
 
 	static function onMessage(type: String, data: Dynamic): Star<cpp.Void> {
 		trace('Got message of type $type ($data)');
 		
 		switch type {
 			case 'SET-NATIVE-CALLBACK':
+				// set a native code callback so haxe can call into native code
 				nativeCallback = cast data;
 
 			case 'NUMBER':
-				var num: cpp.Pointer<Int> = data;
-				trace('number is ${num[0]}');
+				var numPointer: cpp.Pointer<Int> = data;
+				number = numPointer[0];
+				trace('\tnumber is ${number}');
 
 			case 'TRIGGER-EXCEPTION':
+				// this will kill the haxe main thread because the exception is unhandled
+				// the user can get unhandled exception info by providing a callback when starting the haxe thread
 				throw "Here's a haxe runtime exception";
 
 			default:
@@ -70,7 +78,8 @@ class HaxeProgram {
 				trace('Unknown native event "$type" ($num – ${num[0]}) ');
 		}
 
-		var cStr = ConstCharStar.fromString(retStr);
+		// for all messages, return our string to demonstrate message replies
+		var cStr = ConstCharStar.fromString(messageReply);
 		return cast cStr;
 	}
 

@@ -18,19 +18,21 @@ extern "C" {
 	 * 
 	 * This must be called before sending messages
 	 * 
-	 * It may be called again if `HaxeEmbed_endHaxeThread` is used to end the current haxe thread (all values stored in static variables in haxe will be lose)
+	 * It may be called again if `HaxeEmbed_endHaxeThread` is used to end the current haxe thread first (all values stored in static variables in haxe will be lost)
 	 * 
 	 * @param unhandledExceptionCallback a callback to exectue if a fatal unhandled exception occurs on the haxe thread. This will be executed on the haxe thread immediately before it ends. Use `NULL` for no callback
 	 * @returns `NULL` if the thread initializes successfully or a null terminated C string with exception if an exception occurs during initialization
 	 */
-	const char* HaxeEmbed_initHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
+	const char* HaxeEmbed_startHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
 
 	/**
 	 * Ends the haxe thread after it finishes processing pending events (events scheduled in the future will not be executed)
 	 * 
 	 * Blocks until the haxe thread has finished
 	 * 
-	 * `HaxeEmbed_initHaxeThread` may be used to reinitialize the thread (haxe main() will be called for a second time)
+	 * `HaxeEmbed_startHaxeThread` may be used to reinitialize the thread (haxe main() will be called for a second time)
+	 * 
+	 * May be called on a different thread to `HaxeEmbed_startHaxeThread` but must not be called from the haxe thread
 	 */
 	void HaxeEmbed_endHaxeThread();
 
@@ -51,7 +53,7 @@ extern "C" {
 	 * @param type C string to pass into the message handler as the message's type
 	 * @param data pointer to pass in as the message handler as the message's data
 	**/
-	void  HaxeEmbed_sendMessageAsync(const char* type, void* data);
+	void HaxeEmbed_sendMessageAsync(const char* type, void* data);
 
 #ifdef __cplusplus
 }

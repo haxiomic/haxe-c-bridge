@@ -22,6 +22,7 @@ bool threadInitialized = false;
 const char* threadInitExceptionInfo = nullptr;
 HxSemaphore threadInitSemaphore;
 HxSemaphore threadEndSemaphore;
+HxMutex threadManageMutex;
 
 HaxeExceptionCallback haxeExceptionCallback = nullptr;
 
@@ -57,6 +58,7 @@ THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 		_HaxeEmbedGenerated::mainThreadEndlessLoop();
 
 	} catch(Dynamic runtimeException) {
+
 		// An EndThreadException is used to break out of the event loop, we don't need to report this exception
 		if (!runtimeException.IsClass<EndThreadException>()) {
 			if (haxeExceptionCallback != nullptr) {
@@ -64,6 +66,7 @@ THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 				haxeExceptionCallback(info);
 			}
 		}
+
 	}
 
 	threadEndSemaphore.Set();
@@ -72,7 +75,9 @@ THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-const char* HaxeEmbed_initHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
+const char* HaxeEmbed_startHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
+	threadManageMutex.Lock();
+
 	if (threadInitialized) return nullptr;
 
 	haxeExceptionCallback = unhandledExceptionCallback;
@@ -85,11 +90,14 @@ const char* HaxeEmbed_initHaxeThread(HaxeExceptionCallback unhandledExceptionCal
 
 	threadInitialized = true;
 
+	threadManageMutex.Unlock();
+
 	return threadInitExceptionInfo;
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
 void HaxeEmbed_endHaxeThread() {
+	threadManageMutex.Lock();
 	if (!threadInitialized) return;
 
 	hx::NativeAttach autoAttach;
@@ -101,6 +109,7 @@ void HaxeEmbed_endHaxeThread() {
 	threadEndSemaphore.Wait();
 
 	threadInitialized = false;
+	threadManageMutex.Unlock();
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
