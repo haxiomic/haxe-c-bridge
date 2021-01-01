@@ -24,12 +24,11 @@ import sys.thread.Mutex;
 **/
 
 #if (!display && !display_details)
-
 // expose this classes methods to be easily called externally
 @:nativeGen
 @:keep
 
-// to expose a C-API we add to the compilation a little C-wrapper for this class
+// to expose a C-API we add to the hxcpp compilation
 @:build(HaxeEmbed.Macro.hxcppAddNativeCode('./HaxeEmbed.h', 'HaxeEmbed.cpp'))
 @:native('_HaxeEmbedGenerated')
 #end
