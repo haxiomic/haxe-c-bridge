@@ -101,7 +101,7 @@ class HaxeEmbed {
 	}
 
 	/**
-		Keeps the main thread event loop alive (event after all events and promises are exhausted)
+		Keeps the main thread event loop alive (even after all events and promises are exhausted)
 	**/
 	@:noCompletion
 	static public function mainThreadEndlessLoop() {
