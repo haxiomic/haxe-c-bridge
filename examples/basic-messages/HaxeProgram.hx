@@ -23,13 +23,8 @@ import cpp.Star;
 /**/
 class HaxeProgram {
 
-	// demonstrating static vars are lost if the haxe thread is shutdown
-	static var incrementingStaticVar = 0;
 	static var loopCount = 0;
 	static var nativeCallback: cpp.Callable<Int -> Void> = new Callable(null);
-
-	// number is set from native code by sending a message with type 'NUMBER'
-	static var number: Int = -1;
 
 	static function main() {
 		trace('HaxeProgram.main()');
@@ -38,9 +33,9 @@ class HaxeProgram {
 		HaxeEmbed.setMessageHandler(onMessage);
 
 		// check the haxe-thread's event loop is working
-		Timer.delay(() -> {
-			trace('delay 3000 complete');
-		}, 3000);
+		// this will add a pending event scheduled in the future, but it should not prevent the haxe thread from ending
+		Timer.delay(() -> trace('delay 3s complete'), 3000);
+		Timer.delay(() -> trace('delay 4s complete'), 4000);// if main.c sleeps for only 3s before stopping the haxe thread, this should never be executed
 
 		function loop() {
 			trace('loop $loopCount');
@@ -56,8 +51,7 @@ class HaxeProgram {
 	static final messageReply = 'string from haxe!';
 
 	static function onMessage(type: String, data: Dynamic): Star<cpp.Void> {
-		// trace('Got message of type $type ($data)');
-		
+
 		switch type {
 			case 'SET-NATIVE-CALLBACK':
 				// set a native code callback so haxe can call into native code
@@ -65,7 +59,7 @@ class HaxeProgram {
 
 			case 'NUMBER':
 				var numPointer: cpp.Pointer<Int> = data;
-				number = numPointer[0];
+				var number = numPointer[0];
 				trace('Number message: ${number}');
 
 			case 'ASYNC-MESSAGE':
@@ -78,8 +72,7 @@ class HaxeProgram {
 				throw "Here's a haxe runtime exception :)";
 
 			default:
-				var num: cpp.Pointer<Int> = data;
-				trace('Unknown native event "$type" ($num – ${num[0]}) ');
+				trace('Unknown native event "$type"');
 		}
 
 		// for all messages, return our string to demonstrate message replies
