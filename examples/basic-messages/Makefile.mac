@@ -11,7 +11,7 @@ all: $(HAXE_BIN)/$(HAXE_LIB) $(EXE)
 	install_name_tool -change $(HAXE_LIB) $(HAXE_BIN)/$(HAXE_LIB) $(EXE)
 
 $(HAXE_BIN)/$(HAXE_LIB): ALWAYS_RUN
-	haxe build.hxml
+	haxe build-library.hxml
 
 ALWAYS_RUN: ;
 
