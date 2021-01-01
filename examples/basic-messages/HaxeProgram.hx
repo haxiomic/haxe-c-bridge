@@ -32,7 +32,7 @@ class HaxeProgram {
 	static var number: Int = -1;
 
 	static function main() {
-		trace('haxe main() incrementing static var: ${incrementingStaticVar++}');
+		trace('HaxeProgram.main()');
 
 		// register a callback to receive messages from native calls
 		HaxeEmbed.setMessageHandler(onMessage);
@@ -43,9 +43,9 @@ class HaxeProgram {
 		}, 3000);
 
 		function loop() {
-			trace('loop $loopCount $nativeCallback');
+			trace('loop $loopCount');
 			if (nativeCallback != null) {
-				nativeCallback(number);
+				nativeCallback(loopCount);
 			}
 			loopCount++;
 			Timer.delay(loop, 500);
@@ -56,7 +56,7 @@ class HaxeProgram {
 	static final messageReply = 'string from haxe!';
 
 	static function onMessage(type: String, data: Dynamic): Star<cpp.Void> {
-		trace('Got message of type $type ($data)');
+		// trace('Got message of type $type ($data)');
 		
 		switch type {
 			case 'SET-NATIVE-CALLBACK':
@@ -66,12 +66,16 @@ class HaxeProgram {
 			case 'NUMBER':
 				var numPointer: cpp.Pointer<Int> = data;
 				number = numPointer[0];
-				trace('\tnumber is ${number}');
+				trace('Number message: ${number}');
+
+			case 'ASYNC-MESSAGE':
+				var payload: Star<MessagePayload> = data;
+				trace('Async message payload: ${payload.someFloat}, ${payload.cStr}');
 
 			case 'TRIGGER-EXCEPTION':
 				// this will kill the haxe main thread because the exception is unhandled
 				// the user can get unhandled exception info by providing a callback when starting the haxe thread
-				throw "Here's a haxe runtime exception";
+				throw "Here's a haxe runtime exception :)";
 
 			default:
 				var num: cpp.Pointer<Int> = data;
@@ -82,6 +86,5 @@ class HaxeProgram {
 		var cStr = ConstCharStar.fromString(messageReply);
 		return cast cStr;
 	}
-
 
 }

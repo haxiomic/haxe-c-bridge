@@ -1,8 +1,12 @@
 # Basic C-to-Haxe Message Passing
 
-Example demonstrating embedding a multi-threaded haxe program in a simple C program. The haxe example to embed is [HaxeProgram.hx](./HaxeProgram.hx) and the hosting C program is [main.c](./main.c)
+Example demonstrating embedding a multi-threaded haxe program in a simple C program. The haxe code embedded is [HaxeProgram.hx](./HaxeProgram.hx) and the hosting C program is [main.c](./main.c)
 
 [main.c](./main.c) Uses the HaxeEmbed library to start a haxe thread and pass it messages. When the haxe thread starts, the haxe `main()` function in [HaxeProgram.hx](./HaxeProgram.hx) is executed and it registers a callback to receive messages from native code using `HaxeEmbed.setMessageHandler(onMessage)`
+
+[main.c](./main.c) demonstrates many common patterns you may want to use – synchronous and asynchronous message passing, supplying callbacks to the haxe code so it can call into native code and restarting the haxe thread
+
+## Compiling
 
 I've included a makefile for compiling on macOS (`make -f makefile.mac`), however the example is simple and should work with any C toolchain or platform, to compile from scratch:
 
