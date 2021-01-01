@@ -1,5 +1,9 @@
 {
 	"name": "haxe-embed",
-	"version": "0.0.0",
-	"description": "Easily embed a haxe program within a native application via a C message passing interface"
+	"description": "Easily embed a multi-threaded haxe program within a native application via a C message passing interface",
+	"version": "0.0.1",
+	"contributors": ["haxiomic"],
+	"license": "MIT",
+	"tags": ["hxcpp", "native", "embed", "ios", "mac", "windows", "linux", "android"],
+	"url": "https://github.com/haxiomic/haxe-embed"
 }
