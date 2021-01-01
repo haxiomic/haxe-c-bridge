@@ -55,7 +55,7 @@ extern "C" {
 	 * 
 	 * @param type C string to pass into the message handler as the message's type
 	 * @param data pointer to pass in as the message handler as the message's data
-	 * @param onComplete callback executed on the haxe thread after the message is handled – you may want to use this to free data allocated for this message (if you know it is no longer used)
+	 * @param onComplete callback executed on the haxe thread after the message is handled – you may want to use this to free data allocated for this message (if you know it is no longer used). Use `NULL` for no callback
 	**/
 	void HaxeEmbed_sendMessageAsync(const char* type, void* data, HaxeMessageHandledCallback onComplete);
 
