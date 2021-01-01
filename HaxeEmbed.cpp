@@ -14,7 +14,7 @@
 // hxcpp-generated C++ header for HaxeEmbed.hx
 #include "_HaxeEmbedGenerated.h"
 
-#include "EndThreadException.h"
+#include "_HaxeEmbed/EndThreadException.h"
 
 extern "C" void __hxcpp_main();
 
@@ -60,7 +60,7 @@ THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 	} catch(Dynamic runtimeException) {
 
 		// An EndThreadException is used to break out of the event loop, we don't need to report this exception
-		if (!runtimeException.IsClass<EndThreadException>()) {
+		if (!runtimeException.IsClass<_HaxeEmbed::EndThreadException>()) {
 			if (haxeExceptionCallback != nullptr) {
 				const char* info = runtimeException->toString().utf8_str();
 				haxeExceptionCallback(info);

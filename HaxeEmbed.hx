@@ -123,7 +123,7 @@ class HaxeEmbed {
 
 }
 
-class EndThreadException extends haxe.Exception {}
+private class EndThreadException extends haxe.Exception {}
 
 /**
 	We have to use a separate class to store data because `@:nativeGen` doesn't allow for variables.
