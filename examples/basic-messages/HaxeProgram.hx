@@ -8,8 +8,8 @@ import sys.thread.Lock;
 import haxe.Timer;
 import cpp.Star;
 
-	// <compilerflag value="-fsanitize=thread" />
-/**/
+// uncomment to enable address-sanitizer for clang or gcc
+/**
 @:buildXml('
 <files id="haxe">
 	<compilerflag value="-fno-omit-frame-pointer" />
