@@ -119,7 +119,7 @@ void* HaxeEmbed_sendMessageSync(const char* type, void* data) {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-void HaxeEmbed_sendMessageAsync(const char* type, void* data) {
+void HaxeEmbed_sendMessageAsync(const char* type, void* data, HaxeMessageHandledCallback onComplete) {
 	hx::NativeAttach autoAttach;
-	_HaxeEmbedGenerated::sendMessageAsync(type, data);
+	_HaxeEmbedGenerated::sendMessageAsync(type, data, onComplete);
 }

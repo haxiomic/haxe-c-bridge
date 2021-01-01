@@ -8,6 +8,7 @@
 #define HaxeEmbedC_h
 
 typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
+typedef void (* HaxeMessageHandledCallback) (void* data);
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,6 +40,8 @@ extern "C" {
 	/**
 	 * Executes haxe message handler with `type` and `data` on the haxe main thread and waits for handler completion
 	 * 
+	 * Thread-safe
+	 * 
 	 * @param type C string to pass into the message handler as the message's type
 	 * @param data pointer to pass in as the message handler as the message's data
 	 * @returns Value returned from the haxe message handler (becarefull returning haxe objects that may be garbage collected). If a an unhandled exception occurs during handling, `NULL` will be returned and the haxe thread will end
@@ -52,8 +55,9 @@ extern "C" {
 	 * 
 	 * @param type C string to pass into the message handler as the message's type
 	 * @param data pointer to pass in as the message handler as the message's data
+	 * @param onComplete callback executed on the haxe thread after the message is handled – you may want to use this to free data allocated for this message (if you know it is no longer used)
 	**/
-	void HaxeEmbed_sendMessageAsync(const char* type, void* data);
+	void HaxeEmbed_sendMessageAsync(const char* type, void* data, HaxeMessageHandledCallback onComplete);
 
 #ifdef __cplusplus
 }

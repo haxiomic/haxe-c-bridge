@@ -1,8 +1,10 @@
 #if !macro
 import cpp.Star;
+import cpp.Callable;
 import cpp.ConstCharStar;
 import sys.thread.Lock;
 import sys.thread.Thread;
+import sys.thread.Mutex;
 
 /**
  * Interface with a multi-threaded haxe project from C via message passing
@@ -13,9 +15,9 @@ import sys.thread.Thread;
  * In your haxe `main()`, call `HaxeEmbed.setMessageHandler(your-handler-function)` to receive messages from native code
  * 
  * In your native C code, include `include/HaxeEmbed.h` from the hxcpp generated code and call:
- * - `HaxeEmbed_initialize()` to start the haxe thread
+ * - `HaxeEmbed_startHaxeThread()` to start the haxe thread
  * - `HaxeEmbed_sendMessageSync(const char* type, void* data)` to schedule the message handler on the haxe thread and block until it completes
- * - `HaxeEmbed_sendMessageAsync(const char* type, void* data)` to schedule the message handler on the haxe thread and return immediately
+ * - `HaxeEmbed_sendMessageAsync(const char* type, void* data, HaxeMessageHandledCallback onComplete)` to schedule the message handler on the haxe thread, return immediately and execute the callback when the message has been handled
  *
  * @author haxiomic (George Corney)
 **/
@@ -51,14 +53,23 @@ class HaxeEmbed {
 	**/
 	@:noCompletion
 	static public function sendMessageSync(type: String, data: Star<cpp.Void>): Star<cpp.Void> {
-		// queue message handler to run on the haxe main thread and wait for completion
-		Internal.currentMessageType = type;
-		Internal.currentMessageData = data;
-		Internal.haxeMainThread.events.run(Internal.runEvent);
+		if (Thread.current() == Internal.haxeMainThread) {
+			return Internal.messageHandler(type, data);
+		} else {
+			Internal.sendMessageMutex.acquire();
 
-		Internal.runEventLock.wait();
+			// queue message handler to run on the haxe main thread and wait for completion
+			Internal.currentMessageType = type;
+			Internal.currentMessageData = data;
+			Internal.haxeMainThread.events.run(Internal.runEvent);
 
-		return Internal.currentMessageResult;
+			// wait for runEvent() to complete
+			Internal.runEventLock.wait();
+
+			Internal.sendMessageMutex.release();
+
+			return Internal.currentMessageResult;
+		}
 	}
 
 	/**
@@ -69,10 +80,13 @@ class HaxeEmbed {
 		Called from a foreign (but hxcpp-attached) thread
 	**/
 	@:noCompletion
-	static public function sendMessageAsync(type: String, data: Star<cpp.Void>): Void {
+	static public function sendMessageAsync(type: String, data: Star<cpp.Void>, onComplete: Callable<(data: Star<cpp.Void>) -> Void>): Void {
 		// queue message handler to run on the haxe main thread but don't wait for completion
 		Internal.haxeMainThread.events.run(() -> {
 			Internal.messageHandler(type, data);
+			if (onComplete != null) {
+				onComplete(data);
+			}
 		});
 	}
 	
@@ -97,6 +111,9 @@ class HaxeEmbed {
 		}
 	}
 
+	/**
+		Break out of the event loop by throwing an end-thread exception
+	**/
 	@:noCompletion
 	static public function mainThreadEnd() {
 		Internal.haxeMainThread.events.run(() -> {
@@ -118,6 +135,7 @@ private class Internal {
 	static public var haxeMainThread: Thread;
 	static public var messageHandler: (type: String, data: Dynamic) -> Star<cpp.Void> = defaultHandler;
 
+	static public final sendMessageMutex = new Mutex();
 	static public final runEventLock = new Lock();
 	static public var currentMessageType: String;
 	static public var currentMessageData: Star<cpp.Void>;
