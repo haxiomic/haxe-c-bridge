@@ -1,8 +1,8 @@
 # HaxeEmbed
 
-Interface with a multi-threaded haxe program from C via message passing
+Interface with a multi-threaded hxcpp haxe program from C via message passing
 
-**Requires haxe 4.2**
+**Requires haxe 4.2 and hxcpp**
 
 ## Usage
 In your haxe `main()`, call `HaxeEmbed.setMessageHandler(your-handler-function)` to receive messages from native code
