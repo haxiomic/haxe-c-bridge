@@ -7,7 +7,7 @@ import sys.thread.Thread;
 import sys.thread.Mutex;
 
 /**
- * Interface with a multi-threaded haxe project from C via message passing
+ * Interface with a multi-threaded haxe program from C via message passing
  * 
  * **Requires haxe 4.2**
  *
@@ -15,9 +15,10 @@ import sys.thread.Mutex;
  * In your haxe `main()`, call `HaxeEmbed.setMessageHandler(your-handler-function)` to receive messages from native code
  * 
  * In your native C code, include `include/HaxeEmbed.h` from the hxcpp generated code and call:
- * - `HaxeEmbed_startHaxeThread()` to start the haxe thread
- * - `HaxeEmbed_sendMessageSync(const char* type, void* data)` to schedule the message handler on the haxe thread and block until it completes
- * - `HaxeEmbed_sendMessageAsync(const char* type, void* data, HaxeMessageHandledCallback onComplete)` to schedule the message handler on the haxe thread, return immediately and execute the callback when the message has been handled
+ * - `HaxeEmbed_startHaxeThread(exceptionCallback)` to start the haxe thread
+ * - `HaxeEmbed_sendMessageSync(type, data)` to schedule the message handler on the haxe thread and block until it completes
+ * - `HaxeEmbed_sendMessageAsync(type, data, onComplete)` to schedule the message handler on the haxe thread, return immediately and execute the callback when the message has been handled
+ * - `HaxeEmbed_stopHaxeThread()` to end the haxe thread (all state from the haxe thread is lost)
  *
  * @author haxiomic (George Corney)
 **/

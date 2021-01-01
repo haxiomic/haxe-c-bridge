@@ -1,5 +1,5 @@
 /**
- * C language wrapper to interact with HaxeEmbed from C
+ * Interface with a multi-threaded haxe program from C via message passing
  * 
  * @author haxiomic (George Corney)
  */
@@ -19,7 +19,7 @@ extern "C" {
 	 * 
 	 * This must be called before sending messages
 	 * 
-	 * It may be called again if `HaxeEmbed_endHaxeThread` is used to end the current haxe thread first (all values stored in static variables in haxe will be lost)
+	 * It may be called again if `HaxeEmbed_stopHaxeThread` is used to end the current haxe thread first (all state from the previous execution will be lost)
 	 * 
 	 * @param unhandledExceptionCallback a callback to exectue if a fatal unhandled exception occurs on the haxe thread. This will be executed on the haxe thread immediately before it ends. Use `NULL` for no callback
 	 * @returns `NULL` if the thread initializes successfully or a null terminated C string with exception if an exception occurs during initialization
@@ -31,11 +31,11 @@ extern "C" {
 	 * 
 	 * Blocks until the haxe thread has finished
 	 * 
-	 * `HaxeEmbed_startHaxeThread` may be used to reinitialize the thread (haxe main() will be called for a second time)
+	 * `HaxeEmbed_startHaxeThread` may be used to reinitialize the thread. Haxe main() will be called for a second time and all state from the previous execution will be lost
 	 * 
 	 * May be called on a different thread to `HaxeEmbed_startHaxeThread` but must not be called from the haxe thread
 	 */
-	void HaxeEmbed_endHaxeThread();
+	void HaxeEmbed_stopHaxeThread();
 
 	/**
 	 * Executes haxe message handler with `type` and `data` on the haxe main thread and waits for handler completion

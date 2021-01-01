@@ -1,7 +1,5 @@
 /**
- * C language wrapper to interact with HaxeEmbed from C
- * 
- * Here we implement the exposed C methods to call into C++ haxe code
+ * Impelement starting and ending the haxe thread and pass through sendMessage* calls
  * 
  * @author haxiomic (George Corney)
  */
@@ -96,7 +94,7 @@ const char* HaxeEmbed_startHaxeThread(HaxeExceptionCallback unhandledExceptionCa
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-void HaxeEmbed_endHaxeThread() {
+void HaxeEmbed_stopHaxeThread() {
 	threadManageMutex.Lock();
 	if (!threadInitialized) return;
 

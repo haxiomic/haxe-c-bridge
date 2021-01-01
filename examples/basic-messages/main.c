@@ -54,7 +54,7 @@ int main(void) {
 	// test triggering an unhandled exception (this should execute our exception callback)
 	HaxeEmbed_sendMessageAsync("TRIGGER-EXCEPTION", NULL, NULL);
 
-	HaxeEmbed_endHaxeThread();
+	HaxeEmbed_stopHaxeThread();
 	printf("main.c: haxe thread ended\n");
 
 	// start the haxe thread again, all data stored in static variables in haxe will be lost
@@ -67,7 +67,7 @@ int main(void) {
 	printf("main.c: sleep complete\n");
 
 	// end the haxe thread (this will block while the haxe thread finishes processing immediate pending events)
-	HaxeEmbed_endHaxeThread();
+	HaxeEmbed_stopHaxeThread();
 
 	return 0;
 }
