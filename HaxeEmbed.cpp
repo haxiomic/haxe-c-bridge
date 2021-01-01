@@ -96,6 +96,7 @@ const char* HaxeEmbed_startHaxeThread(HaxeExceptionCallback unhandledExceptionCa
 HXCPP_EXTERN_CLASS_ATTRIBUTES
 void HaxeEmbed_stopHaxeThread() {
 	threadManageMutex.Lock();
+
 	if (!threadInitialized) return;
 
 	hx::NativeAttach autoAttach;
@@ -107,6 +108,7 @@ void HaxeEmbed_stopHaxeThread() {
 	threadEndSemaphore.Wait();
 
 	threadInitialized = false;
+
 	threadManageMutex.Unlock();
 }
 

@@ -21,6 +21,8 @@ extern "C" {
 	 * 
 	 * It may be called again if `HaxeEmbed_stopHaxeThread` is used to end the current haxe thread first (all state from the previous execution will be lost)
 	 * 
+	 * Thread-safe
+	 * 
 	 * @param unhandledExceptionCallback a callback to exectue if a fatal unhandled exception occurs on the haxe thread. This will be executed on the haxe thread immediately before it ends. Use `NULL` for no callback
 	 * @returns `NULL` if the thread initializes successfully or a null terminated C string with exception if an exception occurs during initialization
 	 */
@@ -33,7 +35,7 @@ extern "C" {
 	 * 
 	 * `HaxeEmbed_startHaxeThread` may be used to reinitialize the thread. Haxe main() will be called for a second time and all state from the previous execution will be lost
 	 * 
-	 * May be called on a different thread to `HaxeEmbed_startHaxeThread` but must not be called from the haxe thread
+	 * Thread-safety: May be called on a different thread to `HaxeEmbed_startHaxeThread` but must not be called from the haxe thread
 	 */
 	void HaxeEmbed_stopHaxeThread();
 
@@ -52,6 +54,8 @@ extern "C" {
 	 * Executes haxe message handler with `type` and `data` on the haxe main thread but does not wait for handler completion
 	 * 
 	 * Because the message can be handled at an indeterminate time in the future, the caller must ensure the data pointer remains valid until then
+	 * 
+	 * Thread-safe
 	 * 
 	 * @param type C string to pass into the message handler as the message's type
 	 * @param data pointer to pass in as the message handler as the message's data
