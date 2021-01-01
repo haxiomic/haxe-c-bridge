@@ -46,7 +46,7 @@ int main(void) {
 
 	HaxeEmbed_sendMessageAsync("ASYNC-MESSAGE", payload, free);
 
-	// sleep 3s while the haxe thread keeping processing
+	// sleep 3s while the haxe thread continues
 	printf("main.c: sleeping 3s\n");
 	sleep(3);
 	printf("main.c: sleep complete\n");
@@ -57,10 +57,11 @@ int main(void) {
 	HaxeEmbed_endHaxeThread();
 	printf("main.c: haxe thread ended\n");
 
+	// start the haxe thread again, all data stored in static variables in haxe will be lost
 	HaxeEmbed_startHaxeThread(onHaxeException);
 	printf("main.c: haxe thread reinitialized\n");
 
-	// sleep 3s
+	// sleep 3s while the haxe thread continues
 	printf("main.c: sleeping 3s\n");
 	sleep(3);
 	printf("main.c: sleep complete\n");
