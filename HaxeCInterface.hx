@@ -408,11 +408,6 @@ class CTypeConverterContext {
 	}
 
 	public function convertType(type: Type, pos: Position): CType {
-		// var isEnumAbstract = switch abst {
-		// 	case TAbstract(abs, params) if (abs.get().meta.has(':enum')): true;
-		// 	default: false;
-		// }
-
 		var hasCoreTypeIndication = {
 			var baseType = asBaseType(type);
 			if (baseType != null) {
@@ -434,19 +429,20 @@ class CTypeConverterContext {
 			case TInst(t, _):
 				var keyCType = tryConvertKeyType(type, pos);
 				keyCType != null ? keyCType : {
-					trace('- todo $type');
-					Ident('/*${type}*/void* ');
+					Context.warning('- todo $type', pos);
+					Ident('/*${type}*/void*');
 				}
 
 			case TFun(args, ret):
 				Context.fatalError("Callbacks must be wrapped in cpp.Callable<T> when exposing to C", pos);
 
-			case TAnonymous(a): trace('- todo $type');
+			case TAnonymous(a):
+				Context.warning('- todo $type', pos);
 				Ident('/*${type}*/void* ');
 
 			case TAbstract(_.get() => t, _):
 				var isEnumAbstract = t.meta.has(':enum');
-				if (isEnumAbstract) trace('- todo - EnumAbstract for $type');
+				if (isEnumAbstract) Context.warning('- todo - EnumAbstract for $type', pos);
 				var keyCType = tryConvertKeyType(type, pos);
 				if (keyCType != null) {
 					keyCType;
@@ -464,18 +460,17 @@ class CTypeConverterContext {
 					convertType(TypeTools.follow(type, true), pos);
 				}
 
-			case TDynamic(t):
-				Context.fatalError("Dynamic is not supported when exposing to C", pos);
-
 			case TLazy(f):
 				convertType(f(), pos);
+
+			case TDynamic(t):
+				Context.fatalError("Dynamic is not supported when exposing to C", pos);
 			
 			case TMono(t):
 				Context.fatalError("Expected explicit type is required when exposing to C", pos);
 
 			case TEnum(t, params):
 				Context.fatalError("Exposing enum types to C is not supported", pos);
-			
 		}
 	}
 
@@ -504,12 +499,18 @@ class CTypeConverterContext {
 
 				case {t: {pack: [], name: "Null"}}:
 					Context.fatalError("Null<T> is not supported for C export", pos);
+				
+				case {t: {pack: [], name: "Array"}}:
+					Context.fatalError("Array<T> is not supported for C export, try using cpp.Pointer<T> instead", pos);
 
 				case {t: {pack: [], name: 'Void' | 'void'}}: Ident('void');
 				case {t: {pack: [], name: "Bool"}}: Ident("bool");
 				case {t: {pack: [], name: "Float"}}: Ident("double");
 				case {t: {pack: [], name: "Int"}}: Ident("int");
 				case {t: {pack: [], name: "Single"}}: Ident("float");
+
+				// needs explicit conversion internally
+				case {t: {pack: [], name: "String"}}: Pointer(Ident("char", [Const]));
 
 				case {t: {pack: ["cpp"], name: "SizeT"}}: requireHeader('stddef.h'); Ident("size_t");
 				case {t: {pack: ["cpp"], name: "Char"}}: Ident("char");
