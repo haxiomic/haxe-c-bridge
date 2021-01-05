@@ -83,9 +83,7 @@ class PublicApi {
 	// static public function nullable(f: Null<Float>): Void {}
 	// static public function dynamic(dyn: Dynamic): Void {}
 
-	// @! weird hxcpp issue
-	// static public function externStruct(v: MessagePayload): MessagePayload return v;
-	static public function externStruct(v: MessagePayload): Void { };
+	static public function externStruct(v: MessagePayload): MessagePayload return v;
 
 	static public function optional(?single: Single): Void { }
 	static public function badOptional(?opt: Single, notOpt: Single): Void { }

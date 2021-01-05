@@ -108,13 +108,13 @@ class HaxeCInterface {
 					static public function $threadSafeFnName (/* arguments must be defined manually */): $fnRetType {
 						if (sys.thread.Thread.current() == @:privateAccess haxe.EntryPoint.mainThread) {
 							${isRetVoid ? macro $callFn : macro return $callFn};
-						} else {
-							$i{runnerMutexName}.acquire();
-							haxe.EntryPoint.runInMainThread($i{runnerFnName});
-							$i{runnerLockName}.wait();
-							$i{runnerMutexName}.release();
-							${isRetVoid ? macro null : macro return $i{runnerReturnName}};
 						}
+
+						$i{runnerMutexName}.acquire();
+						haxe.EntryPoint.runInMainThread($i{runnerFnName});
+						$i{runnerLockName}.wait();
+						$i{runnerMutexName}.release();
+						${isRetVoid ? macro null : macro return $i{runnerReturnName}};
 					}
 				}).fields[0];
 
