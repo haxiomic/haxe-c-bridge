@@ -1,6 +1,7 @@
 #if macro
 
 import sys.FileSystem;
+import sys.io.File;
 import haxe.macro.Type;
 import haxe.io.Path;
 import haxe.macro.Compiler;
@@ -46,7 +47,8 @@ class HaxeCInterface {
 			fields: [],
 		}
 
-		var threadSafeFunctions = new Array<Field>();
+		var newFields = new Array<Field>();
+
 		for (f in fields) {
 			var fun = switch f.kind {case FFun(f): f; default: null;};
 
@@ -65,44 +67,68 @@ class HaxeCInterface {
 				}
 
 				var fnName = f.name;
-				var fnRetVoid = isVoid(fun.ret);
+				var fnRetType = fun.ret;
+				var isRetVoid = isVoid(fun.ret);
 
-				var threadSafeFnName = '__threadSafeCApi__${f.name}';
 				var argIdentList = fun.args.map(a -> macro $i{a.name});
-				var fnCall = macro $i{fnName}($a{argIdentList});
+				var callFn = macro $i{fnName}($a{argIdentList});
 
+				var prefix = '____';
+
+				var runnerFnName = '${prefix}${f.name}_run';
+				var runnerLockName = '${prefix}${f.name}_lock';
+				var runnerMutexName = '${prefix}${f.name}_mutex';
+				var runnerReturnName = '${prefix}${f.name}_rtn';
+				var runnerFields = (macro class {
+					static var $runnerLockName = new sys.thread.Lock();
+					static var $runnerMutexName = new sys.thread.Mutex();
+
+					static function $runnerFnName() {
+						try {
+							// ${isRetVoid ? callFn : macro rtn = $callFn};
+							// todo - execute call
+							$i{runnerLockName}.release();
+						} catch(e: Any) {
+							$i{runnerLockName}.release();
+							throw e;
+						}
+					}
+				}).fields;
+
+				if (!isRetVoid) {
+					runnerFields.push((macro class {
+						static var $runnerReturnName: $fnRetType;
+					}).fields[0]);
+				}
+
+				var threadSafeFnName = '$prefix${f.name}';
 				// add thread-safe call implementation
 				var threadSafeFunction = (macro class {
 					@:noCompletion
-					static public function $threadSafeFnName(/* arguments must be defined manually */) {
-						if (Thread.current() == @:privateAccess EntryPoint.mainThread) {
-							${fnRetVoid ? macro $fnCall : macro return $fnCall};
+					static public function $threadSafeFnName (/* arguments must be defined manually */): $fnRetType {
+						if (sys.thread.Thread.current() == @:privateAccess haxe.EntryPoint.mainThread) {
+							${isRetVoid ? macro $callFn : macro return $callFn};
 						} else {
-							var completionLock = new Lock();
-							${fnRetVoid ? macro null : macro var rtn};
-							EntryPoint.runInMainThread(() -> {
-								try {
-									${fnRetVoid ? fnCall : macro rtn = $fnCall};
-									completionLock.release();
-								} catch(e: Any) {
-									completionLock.release();
-									throw e;
-								}
-							});
-							completionLock.wait();
-							${fnRetVoid ? macro null : macro return rtn};
+							$i{runnerMutexName}.acquire();
+							haxe.EntryPoint.runInMainThread($i{runnerFnName});
+							$i{runnerLockName}.wait();
+							$i{runnerMutexName}.release();
+							${isRetVoid ? macro null : macro return $i{runnerReturnName}};
 						}
 					}
 				}).fields[0];
 
 				// define arguments
+				var threadSafeFunction = threadSafeFunction;
 				switch threadSafeFunction.kind {
 					case FFun(tsf):
 						tsf.args = fun.args;
 					default:
 				}
 
-				threadSafeFunctions.push(threadSafeFunction);
+				// add new fields to class
+				for (f in runnerFields) newFields.push(f);
+				newFields.push(threadSafeFunction);
 
 				exposedInfo.fields.push(f);
 			}
@@ -117,7 +143,7 @@ class HaxeCInterface {
 			// - include C->C++ binding implementation
 			// - copy generated header to include/
 
-		return fields.concat(threadSafeFunctions);
+		return fields.concat(newFields);
 	}
 
 	static function setupOnAfterGenerate() {
@@ -128,8 +154,10 @@ class HaxeCInterface {
 
 				var projectName = determineProjectName();
 
-				var cTypeConverter = new CTypeConverterContext();
 
+				var cTypeConverter = new CTypeConverterContext({
+					declarationPrefix: projectName,
+				});
 				var header = generateHeader(cTypeConverter, projectName);
 				var headerPath = Path.join([outputDirectory, '$projectName.h']);
 				sys.io.File.saveContent(headerPath, header);
@@ -186,6 +214,7 @@ class HaxeCInterface {
 
 			+ (if (ctx.includes.length > 0) ctx.includes.map(CPrinter.printInclude).join('\n') + '\n\n'; else '')
 			+ (if (ctx.macros.length > 0) ctx.macros.join('\n') + '\n' else '')
+			+ (if (ctx.declarations.length > 0) ctx.declarations.map(CPrinter.printDeclaration).join(';\n') + ';\n\n'; else '')
 
 			+ code('
 			typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
@@ -348,6 +377,12 @@ enum CModifier {
 enum CType {
 	Ident(name: String, ?modifiers: Array<CModifier>);
 	Pointer(t: CType, ?modifiers: Array<CModifier>);
+	FunctionPointer(name: String, argTypes: Array<CType>, ret: CType, ?modifiers: Array<CModifier>);
+}
+
+// not exactly specification C but good enough for this purpose
+enum CDeclaration {
+	Typedef(type: CType, declarators: Array<String>);
 }
 
 typedef CInclude = {
@@ -376,6 +411,13 @@ class CPrinter {
 		return switch cType {
 			case Ident(name, modifiers): (hasModifiers(modifiers) ? (printModifiers(modifiers) + ' ') : '') + name;
 			case Pointer(t, modifiers): printType(t) + '*' + (hasModifiers(modifiers) ? (' ' + printModifiers(modifiers)) : '');
+			case FunctionPointer(name, argTypes, ret): '${printType(ret)} (* $name) (${argTypes.length > 0 ? argTypes.map(printType).join(', ') : 'void'})';
+		}
+	}
+
+	public static function printDeclaration(cDeclaration: CDeclaration) {
+		return switch cDeclaration {
+			case Typedef(type, declarators): 'typedef ${printType(type)} ${declarators.join(', ')}';
 		}
 	}
 
@@ -400,14 +442,32 @@ class CTypeConverterContext {
 	public final includes = new Array<CInclude>();
 	public final macros = new Array<String>();
 
-	public function new() {
+	public final declarations = new Array<CDeclaration>();
+	final declaredIdentifiers = new Map<String, Bool>();
+	
+	final declarationPrefix: String;
+	final generateTypedef: Bool;
+	final generateTypedefWithTypeParameters: Bool;
+
+	/**
+		namespace is used to prefix types
+	**/
+	public function new(options: {
+		?declarationPrefix: String,
+		?generateTypedef: Bool,
+		/** type parameter name is appended to the typedef ident, this makes for long type names so it's disabled by default **/
+		?generateTypedefWithTypeParameters: Bool,
+	} = null) {
+		this.declarationPrefix = (options != null && options.declarationPrefix != null) ? options.declarationPrefix : '';
+		this.generateTypedef = (options != null && options.generateTypedef != null) ? options.generateTypedef : true;
+		this.generateTypedefWithTypeParameters = (options != null && options.generateTypedefWithTypeParameters != null) ? options.generateTypedefWithTypeParameters : false;
 	}
 
 	public function convertComplexType(ct: ComplexType, pos: Position) {
-		return convertType(resolveType(ct, pos), pos);
+		return convertType(resolveType(ct, pos), false, pos);
 	}
 
-	public function convertType(type: Type, pos: Position): CType {
+	public function convertType(type: Type, convertBareFunctionTypes: Bool, pos: Position): CType {
 		var hasCoreTypeIndication = {
 			var baseType = asBaseType(type);
 			if (baseType != null) {
@@ -422,46 +482,86 @@ class CTypeConverterContext {
 		}
 
 		if (hasCoreTypeIndication) {
-			return convertKeyType(type, pos);
+			return convertKeyType(type, convertBareFunctionTypes, pos);
 		}
 		
 		return switch type {
-			case TInst(t, _):
-				var keyCType = tryConvertKeyType(type, pos);
-				keyCType != null ? keyCType : {
-					Context.warning('- todo $type', pos);
-					Ident('/*${type}*/void*');
+			case TInst(_.get() => t, _):
+				var keyCType = tryConvertKeyType(type, convertBareFunctionTypes, pos);
+				if (keyCType != null) {
+					keyCType;
+				} else if (t.isExtern) {
+					var ident = {
+						var nativeMeta = t.meta.extract(':native')[0];
+						var nativeMetaValue = switch nativeMeta {
+							case null: null;
+							case {params: [{expr: EConst(CString(value))}]}: value;
+							default: null;
+						}
+						nativeMetaValue != null ? nativeMetaValue : t.name;
+					}
+					// if the extern has @:include metas, copy the referenced header files so we can #include them locally
+					var includes = t.meta.extract(':include');
+					for (include in includes) {
+						switch include.params {
+							case null:
+							case [{expr: EConst(CString(includePath))}]:
+								// copy the referenced include into the compiler output directory and require this header
+								var filename = Path.withoutDirectory(includePath);
+								var absoluteIncludePath = Path.join([getAbsolutePosDirectory(t.pos), includePath]);
+								var targetFilePath = Path.join([Compiler.getOutput(), filename]);
+								File.copy(absoluteIncludePath, targetFilePath);
+								requireHeader(filename, true);
+							default:
+						}
+					}
+					Ident(ident);
+				} else {
+					Context.fatalError('Could not convert type "${TypeTools.toString(type)}" to C representation', pos);
 				}
 
 			case TFun(args, ret):
-				Context.fatalError("Callbacks must be wrapped in cpp.Callable<T> when exposing to C", pos);
+				if (convertBareFunctionTypes) {
+					getFunctionCType(args, ret, pos);
+				} else {
+					Context.fatalError("Callbacks must be wrapped in cpp.Callable<T> when exposing to C", pos);
+				}
 
 			case TAnonymous(a):
-				Context.warning('- todo $type', pos);
-				Ident('/*${type}*/void* ');
+				Context.fatalError("Haxe structures are not supported when exposing to C, try using an extern for a C struct instead", pos);
 
 			case TAbstract(_.get() => t, _):
 				var isEnumAbstract = t.meta.has(':enum');
 				if (isEnumAbstract) Context.warning('- todo - EnumAbstract for $type', pos);
-				var keyCType = tryConvertKeyType(type, pos);
-				if (keyCType != null) {
-					keyCType;
-				} else {
-					// follow alias
-					convertType(TypeTools.followWithAbstracts(type, true), pos);
-				}
-			
-			case TType(_.get() => t, _):
-				var keyCType = tryConvertKeyType(type, pos);
+				var keyCType = tryConvertKeyType(type, convertBareFunctionTypes, pos);
 				if (keyCType != null) {
 					keyCType;
 				} else {
 					// follow once abstract's underling type
-					convertType(TypeTools.follow(type, true), pos);
+					convertType(TypeTools.followWithAbstracts(type, true), convertBareFunctionTypes, pos);
+				}
+			
+			case TType(_.get() => t, params):
+				var keyCType = tryConvertKeyType(type, convertBareFunctionTypes, pos);
+				if (keyCType != null) {
+					keyCType;
+				} else {
+
+					var useDeclaration =
+						generateTypedef &&
+						(params.length > 0 ? generateTypedefWithTypeParameters : true) &&
+						!t.isPrivate;
+
+					if (useDeclaration) {
+						getTypeAliasCType(type, convertBareFunctionTypes, pos);
+					} else {
+						// follow type alias (with type parameter)
+						convertType(TypeTools.follow(type, true), convertBareFunctionTypes, pos);
+					}
 				}
 
 			case TLazy(f):
-				convertType(f(), pos);
+				convertType(f(), convertBareFunctionTypes, pos);
 
 			case TDynamic(t):
 				Context.fatalError("Dynamic is not supported when exposing to C", pos);
@@ -474,8 +574,12 @@ class CTypeConverterContext {
 		}
 	}
 
-	function convertKeyType(type: Type, pos: Position): CType {
-		var keyCType = tryConvertKeyType(type, pos);
+	/**
+		Convert a key type and expect a result (or fail)
+		A key try is like a core type (and includes :coreType types) but also includes hxcpp's own special types that don't have the :coreType annotation
+	**/
+	function convertKeyType(type: Type, convertBareFunctionTypes: Bool, pos: Position): CType {
+		var keyCType = tryConvertKeyType(type, convertBareFunctionTypes, pos);
 		return if (keyCType == null) {
 			var p = new Printer();
 			Context.warning('No corresponding C type found for "${TypeTools.toString(type)}" (using void* instead)', pos);
@@ -483,14 +587,16 @@ class CTypeConverterContext {
 		} else keyCType;
 	}
 
-	function tryConvertKeyType(type: Type, pos: Position): Null<CType> {
+	/**
+		Return CType if Type was a key type and null otherwise
+	**/
+	function tryConvertKeyType(type: Type, convertBareFunctionTypes: Bool, pos: Position): Null<CType> {
 		var base = asBaseType(type);
 		return if (base != null) {
 			switch base {
-				// special case for CppVoid
+				// special cases where we have to patch out the hxcpp types because they don't work with Context.resolveType
 				case {t: {pack: [], name: 'CppVoid' }}: Ident('void');
-				// special case for ConstPointer which seems to fail in Context.resolveType
-				case {t: {pack: [], name: 'CppConstPointer' }, params: [tp]}: Pointer(setModifier(convertType(tp, pos), Const));
+				case {t: {pack: [], name: 'CppConstPointer' }, params: [tp]}: Pointer(setModifier(convertType(tp, convertBareFunctionTypes, pos), Const));
 
 				/**
 					See `cpp_type_of` in gencpp.ml
@@ -499,7 +605,6 @@ class CTypeConverterContext {
 
 				case {t: {pack: [], name: "Null"}}:
 					Context.fatalError("Null<T> is not supported for C export", pos);
-				
 				case {t: {pack: [], name: "Array"}}:
 					Context.fatalError("Array<T> is not supported for C export, try using cpp.Pointer<T> instead", pos);
 
@@ -525,14 +630,23 @@ class CTypeConverterContext {
 				case {t: {pack: ["cpp"], name: "UInt32"}}: Ident("unsigned int");
 				case {t: {pack: ["cpp"], name: "UInt64"}}: requireHeader('stdint.h'); Ident("uint64_t");
 
-				case {t: {pack: ["cpp"], name: "Star" | "RawPointer" | "Pointer"}, params: [tp]}: Pointer(convertType(tp, pos));
-				case {t: {pack: ["cpp"], name: "ConstStar" | "RawConstPointer" | "ConstPointer"}, params: [tp]}: Pointer(setModifier(convertType(tp, pos), Const));
-				case {t: {pack: ["cpp"], name: "Reference"}}:
-					Context.fatalError("cpp.Reference is not supported for C export", pos);
+				case {t: {pack: ["cpp"], name: "Star" | "RawPointer" | "Pointer"}, params: [tp]}: Pointer(convertType(tp, convertBareFunctionTypes, pos));
+				case {t: {pack: ["cpp"], name: "ConstStar" | "RawConstPointer" | "ConstPointer"}, params: [tp]}: Pointer(setModifier(convertType(tp, convertBareFunctionTypes, pos), Const));
+
+				case {t: {pack: ["cpp"], name: "Callable" | "CallableData"}, params: [tp]}: convertType(tp, true, pos);
+				case {t: {pack: ["cpp"], name: "Function"}, params: [tp, abi]}: convertType(tp, true, pos);
+
+				case {t: {pack: ["cpp"], name: name =
+					"Reference" |
+					"AutoCast" |
+					"VarArg" |
+					"FastIterator"
+				}}:
+					Context.fatalError('cpp.$name is not supported for C export', pos);
 
 				// if the type is in the cpp package and has :native(ident), use that
 				// this isn't ideal because the relevant C header may not be included
-				// case {t: {pack: ['cpp'], meta: _.extract(':native') => [{params: [{expr: EConst(CString(nativeName))}]}]} }:
+				// case {t: {pack: ['cpp'], meta: _.extract(':native') => [{params: [{expr: EConst(CString(nativeName))}]}] } }:
 				// 	Ident(nativeName);
 
 				default:
@@ -541,65 +655,9 @@ class CTypeConverterContext {
 					// case {pack: [], name: "Enum"}: Ident
 					// case {pack: ["cpp"], name: "Object"}: Ident;
 
-					// case {pack: ["cpp"], name: "VarArg"}: Ident;
-					// case {pack: ["cpp"], name: "AutoCast"}: Ident;
-
-					// | ([],"String"), [] ->
-					// 			TCppString
-
 					// (* Things with type parameters hxcpp knows about ... *)
-					// | (["cpp"],"FastIterator"), [p] ->
-					// 						TCppFastIterator(cpp_type_of stack ctx p)
-					// | (["cpp"],"Function"), [function_type; abi] ->
-					// 						cpp_function_type_of stack ctx function_type abi;
-					// | (["cpp"],"Callable"), [function_type]
-					// | (["cpp"],"CallableData"), [function_type] ->
-					// 						cpp_function_type_of_string stack ctx function_type "";
-					// | (("cpp"::["objc"]),"ObjcBlock"), [function_type] ->
-					// 						let args,ret = (cpp_function_type_of_args_ret stack ctx function_type) in
-					// 						TCppObjCBlock(args,ret)
-					// | ((["cpp"]), "Rest"),[rest] ->
-					// 						TCppRest(cpp_type_of stack ctx rest)
-					// | (("cpp"::["objc"]),"Protocol"), [interface_type] ->
-					// 						(match follow interface_type with
-					// 						| TInst (klass,[]) when (has_class_flag klass CInterface) ->
-					// 										TCppProtocol(klass)
-					// 						(* TODO - get the line number here *)
-					// 						| _ -> print_endline "cpp.objc.Protocol must refer to an interface";
-					// 													die "" __LOC__;
-					// 						)
 					// | (["cpp"],"Struct"), [param] ->
 					// 						TCppStruct(cpp_type_of stack ctx param)
-
-					// | ([],"Array"), [p] ->
-					// 			let arrayOf = cpp_type_of stack ctx p in
-					// 			(match arrayOf with
-					// 						| TCppVoid (* ? *)
-					// 						| TCppDynamic ->
-					// 								TCppDynamicArray
-
-					// 						| TCppObject
-					// 						| TCppObjectPtr
-					// 						| TCppReference _
-					// 						| TCppStruct _
-					// 						| TCppStar _
-					// 						| TCppEnum _
-					// 						| TCppInst _
-					// 						| TCppInterface _
-					// 						| TCppProtocol _
-					// 						| TCppClass
-					// 						| TCppDynamicArray
-					// 						| TCppObjectArray _
-					// 						| TCppScalarArray _
-					// 									-> TCppObjectArray(arrayOf)
-					// 						| _ ->
-					// 								TCppScalarArray(arrayOf)
-					// 			)
-
-					// | ([],"Null"), [p] ->
-					// 						cpp_type_of_null stack ctx p
-
-					// trace('Unknown core type "${TypeTools.toString(type)}"');
 					null;
 			}
 		} else null;
@@ -631,6 +689,7 @@ class CTypeConverterContext {
 		return switch cType {
 			case Ident(name, modifiers): Ident(name, _setModifier(modifiers));
 			case Pointer(type, modifiers): Pointer(type, _setModifier(modifiers));
+			case FunctionPointer(name, argTypes, ret, modifiers): FunctionPointer(name, argTypes, ret, _setModifier(modifiers));
 		}
 	}
 
@@ -641,6 +700,47 @@ class CTypeConverterContext {
 				quoted: quoted
 			});
 		}
+	}
+
+	function getTypeAliasCType(type: Type, convertBareFunctionTypes: Bool, pos: Position): CType {
+		var ident = declarationPrefix + '_' + typeDeclarationIdent(type);
+		if (!declaredIdentifiers.exists(ident)) {
+			// order of declarations should be dependency correct because required typedefs are added before this typedef is added
+			var aliasedType = convertType(TypeTools.follow(type, true), convertBareFunctionTypes, pos);
+			declarations.push(Typedef(aliasedType, [ident]));
+			declaredIdentifiers.set(ident, true);
+		}
+		return Ident(ident);
+	}
+
+	function getFunctionCType(args: Array<{name: String, opt: Bool, t: Type}>, ret: Type, pos: Position): CType {
+		// optional type parameters are not supported
+		var ident = 'function_' + args.map(arg -> typeDeclarationIdent(arg.t)).concat([typeDeclarationIdent(ret)]).join('_');
+		if (!declaredIdentifiers.exists(ident)) {
+			var funcPointer: CType = FunctionPointer(
+				ident,
+				args.map(arg -> convertType(arg.t, false, pos)),
+				convertType(ret, false, pos)
+			);
+			declarations.push(Typedef(funcPointer, []));
+			declaredIdentifiers.set(ident, true);
+		}
+		return Ident(ident);
+	}
+
+	// generate a type identifier for declaring a haxe type in C
+	function typeDeclarationIdent(type: Type) {
+		return safeIdent(TypeTools.toString(type));
+	}
+
+	static function safeIdent(str: String) {
+		// replace non a-z0-9_ with _
+		str = ~/[^\w]/gi.replace(str, '_');
+		// replace leading number with _
+		str = ~/^[^a-z_]/i.replace(str, '_');
+		// replace empty string with _
+		str = str == '' ? '_' : str;
+		return str;
 	}
 
 	static function resolveType(ct: ComplexType, pos: Position): Type {
@@ -654,6 +754,17 @@ class CTypeConverterContext {
 			Context.warning('Error resolving type ${ComplexTypeTools.toString(ct)}: $e', pos);
 			Context.resolveType(macro :Any, pos);
 		}
+	}
+
+	/**
+		Return the directory of the Context's current position
+
+		For a @:build macro, this is the directory of the haxe file it's added to
+	**/
+	static function getAbsolutePosDirectory(pos: haxe.macro.Expr.Position) {
+		var classPosInfo = Context.getPosInfos(pos);
+		var classFilePath = Path.isAbsolute(classPosInfo.file) ? classPosInfo.file : Path.join([Sys.getCwd(), classPosInfo.file]);
+		return Path.directory(classFilePath);
 	}
 
 	static public final cKeywords: ReadOnlyArray<String> = ["auto", "double", "int", "struct", "break", "else", "long", "switch", "case", "enum", "register", "typedef", "char", "extern", "return", "union", "const", "float", "short", "unsigned", "continue", "for", "signed", "void", "default", "goto", "sizeof", "volatile", "do", "if", "static", "while"];

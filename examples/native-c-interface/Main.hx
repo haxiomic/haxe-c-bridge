@@ -1,24 +1,20 @@
 import cpp.Callable;
+import cpp.ConstCharStar;
 import cpp.ConstStar;
 import cpp.SizeT;
-import cpp.ConstCharStar;
 import cpp.Star;
-import haxe.EntryPoint;
-import sys.thread.Thread;
-import sys.thread.Lock;
 
 class Main {
 
 	static function main() {
-		var x: Star<cpp.Void> = null;
-		var d: Dynamic = x;
-		trace('hello world! $x');
 	}
 
 }
 
 typedef CustomStar<T> = cpp.Star<T>;
-typedef CppVoidX = cpp.Void;
+typedef CppVoidX = AliasA;
+typedef AliasA = cpp.Void;
+typedef FunctionAlias = (ptr: CustomStar<Int>) -> String;
 
 enum abstract IntEnumAbstract(Int) {
 	var A;
@@ -39,13 +35,13 @@ enum RegularEnum {
 @:build(HaxeCInterface.build())
 @:native('HxPublicApi')
 @:expose
-@:unreflective
 class PublicApi {
 
 	static public function starPointers(
 		starVoid: Star<cpp.Void>, 
 		starVoid2: Star<CppVoidX>,
 		customStar: CustomStar<CppVoidX>,
+		customStar2: CustomStar<CustomStar<Int>>,
 		constStarVoid: ConstStar<cpp.Void>,
 		starInt: Star<Int>,
 		constCharStar: ConstCharStar
@@ -71,23 +67,34 @@ class PublicApi {
 
 	// static public function haxeCallbacks(voidVoid: () -> Void, intString: (a: Int) -> String): Void { }
 
-	static public function hxcppCallbacks(voidVoid: Callable<() -> Void>, intString: Callable<(a: Int) -> String>): Void { }
-
-	static public function someObjects(a: {f1: Star<cpp.Void>, ?optF2: Float}): Void {
-		trace('someCallbacks()');
+	static public function hxcppCallbacks(
+		voidVoid: Callable<() -> Void>,
+		voidInt: Callable<() -> Int>,
+		intString: Callable<(a: Int) -> String>,
+		intVoid: Callable<(Int) -> Void>,
+		fnAlias: Callable<FunctionAlias>
+	): Callable<() -> Void> {
+		return voidVoid;
 	}
 
+
+	// static public function anon(a: {f1: Star<cpp.Void>, ?optF2: Float}): Void { }
+	// static public function array(arrayInt: Array<Int>): Void { }
 	// static public function nullable(f: Null<Float>): Void {}
 	// static public function dynamic(dyn: Dynamic): Void {}
+
+	// @! weird hxcpp issue
+	// static public function externStruct(v: MessagePayload): MessagePayload return v;
+	static public function externStruct(v: MessagePayload): Void { };
+
 	static public function optional(?single: Single): Void { }
 	static public function badOptional(?opt: Single, notOpt: Single): Void { }
 
-	static public function someInterestingTypes(e: IntEnumAbstract, s: StringEnumAbstract /*, re: RegularEnum*/): Void {
-		trace('someInterestingTypes()');
-	}
+	static public function someInterestingTypes(e: IntEnumAbstract, s: StringEnumAbstract /*, re: RegularEnum*/): Void { }
+	static public function cppCoreTypes(sizet: SizeT, char: cpp.Char, constCharStar: cpp.ConstCharStar): Void { }
 
-	static public function cppCoreTypes(sizet: SizeT, char: cpp.Char, constCharStar: cpp.ConstCharStar): Void {
-		trace('cppCoreTypes()');
+	static public function add(a: Int, b: Int): Int {
+		return a + b;
 	}
 
 	// static public function reference(ref: cpp.Reference<Int>): Void {
