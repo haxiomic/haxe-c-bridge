@@ -170,31 +170,6 @@ class HaxeCInterface {
 	}
 
 	static function generateHeader(ctx: CConverterContext, namespace: String) {
-		/*
-		for (info in exposed) {
-			var cls = info.cls.get();
-
-			var typeNamespace =
-				[namespace]
-				.concat(cls.pack)
-				.concat([info.namespaceOverride == null ? cls.name : info.namespaceOverride])
-				.filter(s -> s != '')
-				.join('_');
-
-			for (field in info.fields) {
-				switch field.kind {
-					case FFun(fun):
-						cFunSignatures.push({
-							doc: field.doc,
-							signature: genCFunctionSignature(ctx, '${typeNamespace}_${field.name}', fun, field.pos)
-						});
-					case kind:
-						throw 'Unsupported field kind "$kind"';
-				}
-			}
-		}
-		*/
-
 		return code('
 			/* $namespace.h */
 
