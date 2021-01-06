@@ -1,19 +1,19 @@
-import haxe.macro.TypedExprTools;
-import haxe.macro.ExprTools;
 #if macro
 
-import sys.FileSystem;
-import sys.io.File;
-import haxe.macro.Type;
+import HaxeCInterface.CodeTools.*;
+import haxe.ds.ReadOnlyArray;
 import haxe.io.Path;
 import haxe.macro.Compiler;
 import haxe.macro.ComplexTypeTools;
-import haxe.macro.TypeTools;
-import haxe.macro.Printer;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import haxe.ds.ReadOnlyArray;
-import HaxeCInterface.CodeTools.*;
+import haxe.macro.ExprTools;
+import haxe.macro.Printer;
+import haxe.macro.Type;
+import haxe.macro.TypeTools;
+import haxe.macro.TypedExprTools;
+import sys.FileSystem;
+import sys.io.File;
 
 using Lambda;
 using StringTools;
@@ -143,7 +143,6 @@ class HaxeCInterface {
 			}
 		}
 
-		// generate a header file for this class with the listed C methods
 		// generate an implementation for this class which calls sendMessageSync(function-id, args-as-payload)
 		// be careful to respect :native
 		// add to :buildXml 
@@ -653,7 +652,6 @@ class CConverterContext {
 					// case {pack: [], name: "Class"}: Ident
 					// case {pack: [], name: "Enum"}: Ident
 					// case {pack: ["cpp"], name: "Object"}: Ident;
-
 					// (* Things with type parameters hxcpp knows about ... *)
 					// | (["cpp"],"Struct"), [param] ->
 					// 						TCppStruct(cpp_type_of stack ctx param)
@@ -698,14 +696,6 @@ class CConverterContext {
 				path: path,
 				quoted: quoted
 			});
-		}
-	}
-
-	function getValue(expr: Expr) {
-		return switch expr.expr {
-			case ECast(e, t):
-				getValue(e);
-			default: ExprTools.getValue(expr);
 		}
 	}
 
@@ -787,6 +777,16 @@ class CConverterContext {
 		var classPosInfo = Context.getPosInfos(pos);
 		var classFilePath = Path.isAbsolute(classPosInfo.file) ? classPosInfo.file : Path.join([Sys.getCwd(), classPosInfo.file]);
 		return Path.directory(classFilePath);
+	}
+
+	/**
+		Extends ExprTools.getValue to skip through ECast
+	**/
+	static function getValue(expr: Expr) {
+		return switch expr.expr {
+			case ECast(e, t): getValue(e);
+			default: ExprTools.getValue(expr);
+		}
 	}
 
 	static public final cKeywords: ReadOnlyArray<String> = [
