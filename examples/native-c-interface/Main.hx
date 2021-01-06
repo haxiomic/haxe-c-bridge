@@ -19,6 +19,13 @@ typedef FunctionAlias = (ptr: CustomStar<Int>) -> String;
 enum abstract IntEnumAbstract(Int) {
 	var A;
 	var B;
+	function shouldNotAppearInC() {}
+	static var ThisShouldNotAppearInC: String;
+}
+
+enum abstract IndirectlyReferencedEnum(Int) {
+	var AAA;
+	var BBB;
 }
 
 enum abstract StringEnumAbstract(String) {
@@ -88,7 +95,7 @@ class PublicApi {
 	static public function optional(?single: Single): Void { }
 	static public function badOptional(?opt: Single, notOpt: Single): Void { }
 
-	static public function someInterestingTypes(e: IntEnumAbstract, s: StringEnumAbstract /*, re: RegularEnum*/): Void { }
+	static public function enumTypes(e: IntEnumAbstract, s: StringEnumAbstract, i: Star<IndirectlyReferencedEnum>): Void { }
 	static public function cppCoreTypes(sizet: SizeT, char: cpp.Char, constCharStar: cpp.ConstCharStar): Void { }
 
 	static public function add(a: Int, b: Int): Int {
