@@ -1,3 +1,5 @@
+import haxe.macro.TypedExprTools;
+import haxe.macro.ExprTools;
 #if macro
 
 import sys.FileSystem;
@@ -23,16 +25,20 @@ class HaxeCInterface {
 	static final printer = new Printer();
 	
 	static var isOnAfterGenerateSetup = false;
-	static var exposed = new Array<{
-		cls: Ref<ClassType>,
-		namespaceOverride: Null<String>,
-		fields: Array<Field>
-	}>();
+
+	static final projectName = determineProjectName();
+
+	static final cConversionContext = new CConverterContext({
+		declarationPrefix: projectName,
+		generateTypedef: true,
+		generateTypedefWithTypeParameters: false,
+	});
 
 	static public function build(?namespace: String) {
 		var fields = Context.getBuildFields();
 
 		if (isDisplay) return fields;
+		if (Context.definedValue('target.name') != 'cpp') return fields;
 
 		if (!isOnAfterGenerateSetup) {
 			setupOnAfterGenerate();
@@ -41,11 +47,12 @@ class HaxeCInterface {
 		var cls = Context.getLocalClass().get();
 		cls.meta.add(':keep', [], cls.pos);
 
-		var exposedInfo = {
-			cls: Context.getLocalClass(),
-			namespaceOverride: namespace,
-			fields: [],
-		}
+		var typeNamespace =
+				[projectName]
+				.concat(cls.pack)
+				.concat([namespace == null ? cls.name : namespace])
+				.filter(s -> s != '');
+		
 
 		var newFields = new Array<Field>();
 
@@ -66,6 +73,10 @@ class HaxeCInterface {
 					}
 				}
 
+				// add C function declaration
+				var cFuncName = typeNamespace.concat([f.name]).join('_');
+				cConversionContext.addFunctionDeclaration(cFuncName, fun.args, fun.ret, f.doc, f.pos);
+
 				var fnName = f.name;
 				var fnRetType = fun.ret;
 				var isRetVoid = isVoid(fun.ret);
@@ -73,7 +84,7 @@ class HaxeCInterface {
 				var argIdentList = fun.args.map(a -> macro $i{a.name});
 				var callFn = macro $i{fnName}($a{argIdentList});
 
-				var prefix = '____';
+				var prefix = '__mainThreadSync__';
 
 				var runnerFnName = '${prefix}${f.name}_run';
 				var runnerLockName = '${prefix}${f.name}_lock';
@@ -129,12 +140,8 @@ class HaxeCInterface {
 				// add new fields to class
 				for (f in runnerFields) newFields.push(f);
 				newFields.push(threadSafeFunction);
-
-				exposedInfo.fields.push(f);
 			}
 		}
-
-		exposed.push(exposedInfo);
 
 		// generate a header file for this class with the listed C methods
 		// generate an implementation for this class which calls sendMessageSync(function-id, args-as-payload)
@@ -150,16 +157,11 @@ class HaxeCInterface {
 		if (!noOutput) {
 			Context.onAfterGenerate(() -> {
 				var outputDirectory = getOutputDirectory(); 
-				touchDirectoryPath(outputDirectory);
 
-				var projectName = determineProjectName();
-
-
-				var cTypeConverter = new CTypeConverterContext({
-					declarationPrefix: projectName,
-				});
-				var header = generateHeader(cTypeConverter, projectName);
+				var header = generateHeader(cConversionContext, projectName);
 				var headerPath = Path.join([outputDirectory, '$projectName.h']);
+
+				touchDirectoryPath(outputDirectory);
 				sys.io.File.saveContent(headerPath, header);
 			});
 		}
@@ -167,20 +169,8 @@ class HaxeCInterface {
 		isOnAfterGenerateSetup = true;
 	}
 
-	static function genCType(ctx: CTypeConverterContext, ct: ComplexType, pos: Position) {
-		return CPrinter.printType(ctx.convertComplexType(ct, pos));
-	}
-
-	static function genCFunctionSignature(ctx: CTypeConverterContext, name: String, hxFun: Function, pos: Position) {
-		var cArgList = hxFun.args.map(arg ->
-			'${genCType(ctx, arg.type, pos)} ${!CTypeConverterContext.cKeywords.has(arg.name) ? arg.name : arg.name + '_'}'
-		);
-		return '${genCType(ctx, hxFun.ret, pos)} $name(${cArgList.join(', ')});';
-	}
-
-	static function generateHeader(ctx: CTypeConverterContext, namespace: String) {
-		var cFunSignatures = new Array<{doc: String, signature: String}>();
-
+	static function generateHeader(ctx: CConverterContext, namespace: String) {
+		/*
 		for (info in exposed) {
 			var cls = info.cls.get();
 
@@ -203,6 +193,7 @@ class HaxeCInterface {
 				}
 			}
 		}
+		*/
 
 		return code('
 			/* $namespace.h */
@@ -214,7 +205,7 @@ class HaxeCInterface {
 
 			+ (if (ctx.includes.length > 0) ctx.includes.map(CPrinter.printInclude).join('\n') + '\n\n'; else '')
 			+ (if (ctx.macros.length > 0) ctx.macros.join('\n') + '\n' else '')
-			+ (if (ctx.declarations.length > 0) ctx.declarations.map(CPrinter.printDeclaration).join(';\n') + ';\n\n'; else '')
+			+ (if (ctx.typeDeclarations.length > 0) ctx.typeDeclarations.map(CPrinter.printDeclaration).join(';\n') + ';\n\n'; else '')
 
 			+ code('
 			typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
@@ -250,25 +241,9 @@ class HaxeCInterface {
 
 		')
 
-		+ indent(1, 
-			cFunSignatures.map(s -> {
-				(s.doc != null ?
-					code('
-						/**
-					')
-					+ doc(s.doc)
-					+ code('
-						**/
-					')
-				: '')
-				+ code('
-					${s.signature}
-				');
-			}).join('\n')
-		)
+		+ indent(1, ctx.functionDeclarations.map(fn -> CPrinter.printDeclaration(fn)).join(';\n\n') + ';\n\n')
 
 		+ code('
-
 			#ifdef __cplusplus
 			}
 			#endif
@@ -381,8 +356,15 @@ enum CType {
 }
 
 // not exactly specification C but good enough for this purpose
-enum CDeclaration {
+enum CDeclarationKind {
 	Typedef(type: CType, declarators: Array<String>);
+	Enum(name: String, fields: Array<{name: String, ?value: Int}>);
+	Function(name: String, args: Array<{name: String, type: CType}>, ret: CType);
+}
+
+typedef CDeclaration = {
+	kind: CDeclarationKind,
+	?doc: String,
 }
 
 typedef CInclude = {
@@ -409,16 +391,32 @@ class CPrinter {
 
 	public static function printType(cType: CType): String {
 		return switch cType {
-			case Ident(name, modifiers): (hasModifiers(modifiers) ? (printModifiers(modifiers) + ' ') : '') + name;
-			case Pointer(t, modifiers): printType(t) + '*' + (hasModifiers(modifiers) ? (' ' + printModifiers(modifiers)) : '');
-			case FunctionPointer(name, argTypes, ret): '${printType(ret)} (* $name) (${argTypes.length > 0 ? argTypes.map(printType).join(', ') : 'void'})';
+			case Ident(name, modifiers):
+				(hasModifiers(modifiers) ? (printModifiers(modifiers) + ' ') : '') + name;
+			case Pointer(t, modifiers):
+				printType(t) + '*' + (hasModifiers(modifiers) ? (' ' + printModifiers(modifiers)) : '');
+			case FunctionPointer(name, argTypes, ret):
+				'${printType(ret)} (* $name) (${argTypes.length > 0 ? argTypes.map(printType).join(', ') : 'void'})';
 		}
 	}
 
 	public static function printDeclaration(cDeclaration: CDeclaration) {
-		return switch cDeclaration {
-			case Typedef(type, declarators): 'typedef ${printType(type)} ${declarators.join(', ')}';
+		return
+			(cDeclaration.doc != null ? (printDoc(cDeclaration.doc) + '\n') : '')
+			+ switch cDeclaration.kind {
+				case Typedef(type, declarators):
+					'typedef ${printType(type)}' + (declarators.length > 0 ? ' ${declarators.join(', ')}' :'');
+				case Enum(name, fields):
+					'enum $name {\n'
+					+ fields.map(f -> '\t' + f.name + (f.value != null ? ' = ${f.value}' : '')).join(',\n') + '\n'
+					+ '}';
+				case Function(name, args, ret):
+					'${printType(ret)} $name(${args.map(arg -> '${printType(arg.type)} ${arg.name}').join(', ')})';
 		}
+	}
+
+	public static function printDoc(doc: String) {
+		return '/**\n$doc\n**/';
 	}
 
 	static function hasModifiers(modifiers: Null<Array<CModifier>>)
@@ -437,13 +435,15 @@ class CPrinter {
 
 }
 
-class CTypeConverterContext {
+class CConverterContext {
 
 	public final includes = new Array<CInclude>();
 	public final macros = new Array<String>();
 
-	public final declarations = new Array<CDeclaration>();
-	final declaredIdentifiers = new Map<String, Bool>();
+	public final typeDeclarations = new Array<CDeclaration>();
+	final declaredTypeIdentifiers = new Map<String, Bool>();
+	
+	public final functionDeclarations = new Array<CDeclaration>();
 	
 	final declarationPrefix: String;
 	final generateTypedef: Bool;
@@ -463,16 +463,30 @@ class CTypeConverterContext {
 		this.generateTypedefWithTypeParameters = (options != null && options.generateTypedefWithTypeParameters != null) ? options.generateTypedefWithTypeParameters : false;
 	}
 
-	public function convertComplexType(ct: ComplexType, pos: Position) {
-		return convertType(resolveType(ct, pos), false, pos);
+	public function addFunctionDeclaration(name: String, args: Array<FunctionArg>, ret: ComplexType, doc: Null<String>, pos: Position) {
+		functionDeclarations.push({
+			doc: doc,
+			kind: Function(
+				name,
+				args.map(arg -> {
+					name: cKeywords.has(arg.name) ? (arg.name + '_') : arg.name,
+					type: convertComplexType(arg.type, pos)
+				}),
+				convertComplexType(ret, pos)
+			)
+		});
 	}
 
-	public function convertType(type: Type, convertBareFunctionTypes: Bool, pos: Position): CType {
+	public function convertComplexType(ct: ComplexType, pos: Position) {
+		return convertType(Context.resolveType(ct, pos), false, pos);
+	}
+
+	public function convertType(type: Type, allowBareFnTypes: Bool, pos: Position): CType {
 		var hasCoreTypeIndication = {
 			var baseType = asBaseType(type);
 			if (baseType != null) {
 				var t = baseType.t;
-				// externs in the cpp pacakge are expected to be key-types
+				// externs in the cpp package are expected to be key-types
 				t.isExtern && (t.pack[0] == 'cpp') ||
 				t.meta.has(":coreType") ||
 				// hxcpp doesn't mark its types as :coreType but uses :semantics and :noPackageRestrict sometimes
@@ -482,15 +496,16 @@ class CTypeConverterContext {
 		}
 
 		if (hasCoreTypeIndication) {
-			return convertKeyType(type, convertBareFunctionTypes, pos);
+			return convertKeyType(type, allowBareFnTypes, pos);
 		}
 		
 		return switch type {
 			case TInst(_.get() => t, _):
-				var keyCType = tryConvertKeyType(type, convertBareFunctionTypes, pos);
+				var keyCType = tryConvertKeyType(type, allowBareFnTypes, pos);
 				if (keyCType != null) {
 					keyCType;
 				} else if (t.isExtern) {
+					// we can expose extern types (assumes they're compatible with C)
 					var ident = {
 						var nativeMeta = t.meta.extract(':native')[0];
 						var nativeMetaValue = switch nativeMeta {
@@ -521,7 +536,7 @@ class CTypeConverterContext {
 				}
 
 			case TFun(args, ret):
-				if (convertBareFunctionTypes) {
+				if (allowBareFnTypes) {
 					getFunctionCType(args, ret, pos);
 				} else {
 					Context.fatalError("Callbacks must be wrapped in cpp.Callable<T> when exposing to C", pos);
@@ -531,18 +546,26 @@ class CTypeConverterContext {
 				Context.fatalError("Haxe structures are not supported when exposing to C, try using an extern for a C struct instead", pos);
 
 			case TAbstract(_.get() => t, _):
-				var isEnumAbstract = t.meta.has(':enum');
-				if (isEnumAbstract) Context.warning('- todo - EnumAbstract for $type', pos);
-				var keyCType = tryConvertKeyType(type, convertBareFunctionTypes, pos);
+				var keyCType = tryConvertKeyType(type, allowBareFnTypes, pos);
 				if (keyCType != null) {
 					keyCType;
 				} else {
-					// follow once abstract's underling type
-					convertType(TypeTools.followWithAbstracts(type, true), convertBareFunctionTypes, pos);
+					var isPublicEnumAbstract = t.meta.has(':enum') && !t.isPrivate;
+					var isIntEnumAbstract = if (isPublicEnumAbstract) {
+						var underlyingRootType = TypeTools.followWithAbstracts(t.type, false);
+						Context.unify(underlyingRootType, Context.resolveType(macro :Int, Context.currentPos()));
+					} else false;
+					if (isIntEnumAbstract) {
+						// c-enums can be converted to ints
+						getEnumCType(type, pos);
+					} else {
+						// follow once abstract's underling type
+						convertType(TypeTools.followWithAbstracts(type, true), allowBareFnTypes, pos);
+					}
 				}
 			
 			case TType(_.get() => t, params):
-				var keyCType = tryConvertKeyType(type, convertBareFunctionTypes, pos);
+				var keyCType = tryConvertKeyType(type, allowBareFnTypes, pos);
 				if (keyCType != null) {
 					keyCType;
 				} else {
@@ -553,24 +576,24 @@ class CTypeConverterContext {
 						!t.isPrivate;
 
 					if (useDeclaration) {
-						getTypeAliasCType(type, convertBareFunctionTypes, pos);
+						getTypeAliasCType(type, allowBareFnTypes, pos);
 					} else {
 						// follow type alias (with type parameter)
-						convertType(TypeTools.follow(type, true), convertBareFunctionTypes, pos);
+						convertType(TypeTools.follow(type, true), allowBareFnTypes, pos);
 					}
 				}
 
 			case TLazy(f):
-				convertType(f(), convertBareFunctionTypes, pos);
+				convertType(f(), allowBareFnTypes, pos);
 
 			case TDynamic(t):
 				Context.fatalError("Dynamic is not supported when exposing to C", pos);
 			
 			case TMono(t):
-				Context.fatalError("Expected explicit type is required when exposing to C", pos);
+				Context.fatalError("Explicit type is required when exposing to C", pos);
 
 			case TEnum(t, params):
-				Context.fatalError("Exposing enum types to C is not supported", pos);
+				Context.fatalError("Exposing enum types to C is not supported, try using an enum abstract over Int", pos);
 		}
 	}
 
@@ -578,8 +601,8 @@ class CTypeConverterContext {
 		Convert a key type and expect a result (or fail)
 		A key try is like a core type (and includes :coreType types) but also includes hxcpp's own special types that don't have the :coreType annotation
 	**/
-	function convertKeyType(type: Type, convertBareFunctionTypes: Bool, pos: Position): CType {
-		var keyCType = tryConvertKeyType(type, convertBareFunctionTypes, pos);
+	function convertKeyType(type: Type, allowBareFnTypes: Bool, pos: Position): CType {
+		var keyCType = tryConvertKeyType(type, allowBareFnTypes, pos);
 		return if (keyCType == null) {
 			var p = new Printer();
 			Context.warning('No corresponding C type found for "${TypeTools.toString(type)}" (using void* instead)', pos);
@@ -590,13 +613,13 @@ class CTypeConverterContext {
 	/**
 		Return CType if Type was a key type and null otherwise
 	**/
-	function tryConvertKeyType(type: Type, convertBareFunctionTypes: Bool, pos: Position): Null<CType> {
+	function tryConvertKeyType(type: Type, allowBareFnTypes: Bool, pos: Position): Null<CType> {
 		var base = asBaseType(type);
 		return if (base != null) {
 			switch base {
 				// special cases where we have to patch out the hxcpp types because they don't work with Context.resolveType
 				case {t: {pack: [], name: 'CppVoid' }}: Ident('void');
-				case {t: {pack: [], name: 'CppConstPointer' }, params: [tp]}: Pointer(setModifier(convertType(tp, convertBareFunctionTypes, pos), Const));
+				case {t: {pack: [], name: 'CppConstPointer' }, params: [tp]}: Pointer(setModifier(convertType(tp, allowBareFnTypes, pos), Const));
 
 				/**
 					See `cpp_type_of` in gencpp.ml
@@ -617,6 +640,7 @@ class CTypeConverterContext {
 				// needs explicit conversion internally
 				case {t: {pack: [], name: "String"}}: Pointer(Ident("char", [Const]));
 
+				case {t: {pack: ["cpp"], name: "Void"}}: Ident('void');
 				case {t: {pack: ["cpp"], name: "SizeT"}}: requireHeader('stddef.h'); Ident("size_t");
 				case {t: {pack: ["cpp"], name: "Char"}}: Ident("char");
 				case {t: {pack: ["cpp"], name: "Float32"}}: Ident("float");
@@ -630,8 +654,8 @@ class CTypeConverterContext {
 				case {t: {pack: ["cpp"], name: "UInt32"}}: Ident("unsigned int");
 				case {t: {pack: ["cpp"], name: "UInt64"}}: requireHeader('stdint.h'); Ident("uint64_t");
 
-				case {t: {pack: ["cpp"], name: "Star" | "RawPointer" | "Pointer"}, params: [tp]}: Pointer(convertType(tp, convertBareFunctionTypes, pos));
-				case {t: {pack: ["cpp"], name: "ConstStar" | "RawConstPointer" | "ConstPointer"}, params: [tp]}: Pointer(setModifier(convertType(tp, convertBareFunctionTypes, pos), Const));
+				case {t: {pack: ["cpp"], name: "Star" | "RawPointer" | "Pointer"}, params: [tp]}: Pointer(convertType(tp, allowBareFnTypes, pos));
+				case {t: {pack: ["cpp"], name: "ConstStar" | "RawConstPointer" | "ConstPointer"}, params: [tp]}: Pointer(setModifier(convertType(tp, allowBareFnTypes, pos), Const));
 
 				case {t: {pack: ["cpp"], name: "Callable" | "CallableData"}, params: [tp]}: convertType(tp, true, pos);
 				case {t: {pack: ["cpp"], name: "Function"}, params: [tp, abi]}: convertType(tp, true, pos);
@@ -702,13 +726,47 @@ class CTypeConverterContext {
 		}
 	}
 
-	function getTypeAliasCType(type: Type, convertBareFunctionTypes: Bool, pos: Position): CType {
+	function getValue(expr: Expr) {
+		return switch expr.expr {
+			case ECast(e, t):
+				getValue(e);
+			default: ExprTools.getValue(expr);
+		}
+	}
+
+	function getEnumCType(type: Type, pos: Position): CType {
 		var ident = declarationPrefix + '_' + typeDeclarationIdent(type);
-		if (!declaredIdentifiers.exists(ident)) {
-			// order of declarations should be dependency correct because required typedefs are added before this typedef is added
-			var aliasedType = convertType(TypeTools.follow(type, true), convertBareFunctionTypes, pos);
-			declarations.push(Typedef(aliasedType, [ident]));
-			declaredIdentifiers.set(ident, true);
+
+		if (!declaredTypeIdentifiers.exists(ident)) {
+			
+			switch type {
+				case TAbstract(_.get() => a, params) if(a.meta.has(':enum')):
+					var enumFields = a.impl.get().statics.get()
+						.filter(field -> field.meta.has(':enum') && field.meta.has(':value'))
+						.map(field -> {
+							name: field.name,
+							value: getValue(field.meta.extract(':value')[0].params[0])
+						});
+
+					typeDeclarations.push({kind: Enum(ident, enumFields)});
+
+				default: Context.fatalError('Internal error: Expected enum abstract but got $type', pos);
+			}
+			declaredTypeIdentifiers.set(ident, true);
+			
+		}
+		return Ident(ident);
+	}
+
+	function getTypeAliasCType(type: Type, allowBareFnTypes: Bool, pos: Position): CType {
+		var ident = declarationPrefix + '_' + typeDeclarationIdent(type);
+		if (!declaredTypeIdentifiers.exists(ident)) {
+			
+			// order of typedef typeDeclarations should be dependency correct because required typedefs are added before this typedef is added
+			var aliasedType = convertType(TypeTools.follow(type, true), allowBareFnTypes, pos);
+			typeDeclarations.push({kind: Typedef(aliasedType, [ident])});
+			declaredTypeIdentifiers.set(ident, true);
+			
 		}
 		return Ident(ident);
 	}
@@ -716,14 +774,16 @@ class CTypeConverterContext {
 	function getFunctionCType(args: Array<{name: String, opt: Bool, t: Type}>, ret: Type, pos: Position): CType {
 		// optional type parameters are not supported
 		var ident = 'function_' + args.map(arg -> typeDeclarationIdent(arg.t)).concat([typeDeclarationIdent(ret)]).join('_');
-		if (!declaredIdentifiers.exists(ident)) {
+		if (!declaredTypeIdentifiers.exists(ident)) {
+			
 			var funcPointer: CType = FunctionPointer(
 				ident,
 				args.map(arg -> convertType(arg.t, false, pos)),
 				convertType(ret, false, pos)
 			);
-			declarations.push(Typedef(funcPointer, []));
-			declaredIdentifiers.set(ident, true);
+			typeDeclarations.push({kind: Typedef(funcPointer, []) });
+			declaredTypeIdentifiers.set(ident, true);
+			
 		}
 		return Ident(ident);
 	}
@@ -743,19 +803,6 @@ class CTypeConverterContext {
 		return str;
 	}
 
-	static function resolveType(ct: ComplexType, pos: Position): Type {
-		// replace references of cpp.Void to our typedef CppVoid, this is to work around a bug in Context.resolveType
-		ct = ComplexTypeMap.map(ct, ct -> switch ct {
-			case TPath({pack: ['cpp'], name: 'Void'}): macro :HaxeCInterface.CppVoid;
-			case TPath({pack: ['cpp'], name: 'ConstPointer', params: [TPType(tp)]}): macro :HaxeCInterface.CppConstPointer<$tp>;
-			default: ct;
-		});
-		return try Context.resolveType(ct, pos) catch(e) {
-			Context.warning('Error resolving type ${ComplexTypeTools.toString(ct)}: $e', pos);
-			Context.resolveType(macro :Any, pos);
-		}
-	}
-
 	/**
 		Return the directory of the Context's current position
 
@@ -767,7 +814,10 @@ class CTypeConverterContext {
 		return Path.directory(classFilePath);
 	}
 
-	static public final cKeywords: ReadOnlyArray<String> = ["auto", "double", "int", "struct", "break", "else", "long", "switch", "case", "enum", "register", "typedef", "char", "extern", "return", "union", "const", "float", "short", "unsigned", "continue", "for", "signed", "void", "default", "goto", "sizeof", "volatile", "do", "if", "static", "while"];
+	static public final cKeywords: ReadOnlyArray<String> = [
+		"auto", "double", "int", "struct", "break", "else", "long", "switch", "case", "enum", "register", "typedef", "char", "extern", "return", "union", "const", "float", "short", "unsigned", "continue", "for", "signed", "void", "default", "goto", "sizeof", "volatile", "do", "if", "static", "while",
+		"size_t", "int64_t", "uint64_t"
+	];
 
 }
 
@@ -898,21 +948,5 @@ class CodeTools {
 	}
 
 }
-
-#else
-
-// these types exists to workaround bug with using cpp.Void directly in Context.resolveType
-// maybe it's the `extern`?
-
-@:native("void")
-@:coreType
-@:remove
-@:noCompletion
-abstract CppVoid {}
-
-@:coreType
-@:remove
-@:noCompletion
-abstract CppConstPointer<T> {}
 
 #end
