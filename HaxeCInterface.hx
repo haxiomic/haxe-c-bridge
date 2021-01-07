@@ -1,5 +1,15 @@
 #if macro
 
+#if (display || display_details || target.name != cpp)
+// fast path for when code gen isn't required
+class HaxeCInterface {
+	public static function build() {
+		return Context.getBuildFields();
+	}
+}
+
+#else
+
 import HaxeCInterface.CodeTools.*;
 import haxe.ds.ReadOnlyArray;
 import haxe.io.Path;
@@ -20,7 +30,6 @@ using StringTools;
 
 class HaxeCInterface {
 
-	static final isDisplay = Context.defined('display') || Context.defined('display-details');
 	static final noOutput = Sys.args().has('--no-output');
 	static final printer = new Printer();
 	
@@ -47,9 +56,6 @@ class HaxeCInterface {
 
 	static public function build(?namespace: String) {
 		var fields = Context.getBuildFields();
-
-		if (isDisplay) return fields;
-		if (Context.definedValue('target.name') != 'cpp') return fields;
 
 		if (!isOnAfterGenerateSetup) {
 			setupOnAfterGenerate();
@@ -1150,6 +1156,8 @@ class CodeTools {
 	}
 
 }
+
+#end // (display || display_details || target.name != cpp)
 
 #else
 
