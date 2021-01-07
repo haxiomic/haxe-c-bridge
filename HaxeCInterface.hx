@@ -34,6 +34,16 @@ class HaxeCInterface {
 		generateTypedef: true,
 		generateTypedefWithTypeParameters: false,
 	});
+	static final functionMap = new Map<String, {
+		hxcppName: String,
+		fun: Function,
+		field: Field,
+		rootCTypes: {
+			args: Array<CType>,
+			ret: CType
+		},
+		pos: Position,
+	}>();
 
 	static public function build(?namespace: String) {
 		var fields = Context.getBuildFields();
@@ -45,6 +55,9 @@ class HaxeCInterface {
 			setupOnAfterGenerate();
 		}
 
+		// resolve runtime HaxeCInterface class to make sure it's generated
+		Context.resolveType(macro :HaxeCInterface, Context.currentPos());
+
 		var cls = Context.getLocalClass().get();
 
 		// add @:keep
@@ -54,15 +67,11 @@ class HaxeCInterface {
 		var isNativeGen = cls.meta.has(':nativeGen');
 		var nativeMeta = cls.meta.extract(':native')[0];
 		var nativeMetaValue = nativeMeta != null ? ExprTools.getValue(nativeMeta.params[0]) : null;
-		var nativeName = (nativeMetaValue != null ? nativeMetaValue : cls.name);
+		var nativeName = (nativeMetaValue != null ? nativeMetaValue : cls.pack.concat([cls.name]).join('.'));
 		var nativeHxcppName = nativeName + (isNativeGen ? '' : '_obj');
 
 		// determine the hxcpp generated header path for this class
-		var headerPath = if (nativeMetaValue != null) {
-			nativeMetaValue.split('.');
-		} else {
-			cls.pack.concat([cls.name]);
-		}
+		var headerPath = nativeName.split('.');
 		implementationHeaders.push({path: Path.join(headerPath) + '.h', quoted: false});
 
 		// prefix all functions with lib name and class path
@@ -96,74 +105,28 @@ class HaxeCInterface {
 				var cleanDoc = f.doc != null ? indent(1, removeIndentation(f.doc)) : null;
 				cConversionContext.addFunctionDeclaration(cFuncName, fun.args, fun.ret, cleanDoc, f.pos);
 
-				var fnName = f.name;
-				var fnRetType = fun.ret;
-				var isRetVoid = isVoid(fun.ret);
-
-				var argIdentList = fun.args.map(a -> macro $i{a.name});
-				var callFn = macro $i{fnName}($a{argIdentList});
-
-				var prefix = '__mainThreadSync__';
-
-				var runnerFnName = '${prefix}${f.name}_run';
-				var runnerLockName = '${prefix}${f.name}_lock';
-				var runnerMutexName = '${prefix}${f.name}_mutex';
-				var runnerReturnName = '${prefix}${f.name}_rtn';
-				var runnerFields = (macro class {
-					static var $runnerLockName = new sys.thread.Lock();
-					static var $runnerMutexName = new sys.thread.Mutex();
-
-					static function $runnerFnName() {
-						try {
-							// ${isRetVoid ? callFn : macro rtn = $callFn};
-							// todo - execute call
-							$i{runnerLockName}.release();
-						} catch(e: Any) {
-							$i{runnerLockName}.release();
-							throw e;
-						}
-					}
-				}).fields;
-
-				if (!isRetVoid) {
-					runnerFields.push((macro class {
-						static var $runnerReturnName: $fnRetType;
-					}).fields[0]);
+				inline function getRootCType(ct: ComplexType) {
+					var tmpCtx = new CConverterContext({generateTypedef: false, generateTypedefForFunctions: false, generateEnums: false});
+					return tmpCtx.convertType(
+						Context.resolveType(ct, f.pos),
+						true,
+						f.pos
+					);
 				}
 
-				var threadSafeFnName = '$prefix${f.name}';
-				// add thread-safe call implementation
-				var threadSafeFunction = (macro class {
-					@:noCompletion
-					static public function $threadSafeFnName (/* arguments must be defined manually */): $fnRetType {
-						if (sys.thread.Thread.current() == @:privateAccess haxe.EntryPoint.mainThread) {
-							${isRetVoid ? macro $callFn : macro return $callFn};
-						}
-
-						$i{runnerMutexName}.acquire();
-						haxe.EntryPoint.runInMainThread($i{runnerFnName});
-						$i{runnerLockName}.wait();
-						$i{runnerMutexName}.release();
-						${isRetVoid ? macro null : macro return $i{runnerReturnName}};
-					}
-				}).fields[0];
-
-				// define arguments
-				var threadSafeFunction = threadSafeFunction;
-				switch threadSafeFunction.kind {
-					case FFun(tsf):
-						tsf.args = fun.args;
-					default:
-				}
-
-				// add new fields to class
-				for (f in runnerFields) newFields.push(f);
-				// newFields.push(threadSafeFunction);
+				functionMap.set(cFuncName, {
+					hxcppName: nativeHxcppName.split('.').join('::') + '::' + f.name,
+					fun: fun,
+					field: f,
+					rootCTypes: {
+						args: fun.args.map(a -> getRootCType(a.type)),
+						ret: getRootCType(fun.ret)
+					},
+					pos: f.pos
+				});
 			}
 		}
 
-		// generate an implementation for this class which calls sendMessageSync(function-id, args-as-payload)
-		// be careful to respect :native
 		// add to :buildXml 
 			// - include C->C++ binding implementation
 			// - copy generated header to include/
@@ -225,7 +188,7 @@ class HaxeCInterface {
 				 * @param fatalExceptionCallback a callback to execute if a fatal unhandled exception occurs on the haxe thread. This will be executed on the haxe thread immediately before it ends. You may use this callback to start a new haxe thread. Use `NULL` for no callback
 				 * @returns `NULL` if the thread initializes successfully or a null terminated C string with exception if an exception occurs during initialization
 				**/
-				char* ${namespace}_startHaxeThread(HaxeExceptionCallback fatalExceptionCallback);
+				const char* ${namespace}_startHaxeThread(HaxeExceptionCallback fatalExceptionCallback);
 
 				/**
 				 * Ends the haxe thread after it finishes processing pending events (events scheduled in the future will not be executed)
@@ -257,6 +220,9 @@ class HaxeCInterface {
 			#include <hxcpp.h>
 			#include <hx/Native.h>
 			#include <hx/Thread.h>
+			#include <hx/StdLibs.h>
+			#include <HaxeCInterface.h>
+			#include <_HaxeCInterface/EndThreadException.h>
 
 			#include "../${namespace}.h"
 
@@ -295,24 +261,26 @@ class HaxeCInterface {
 
 				threadInitSemaphore.Set();
 
-				try {
+				if (threadInitExceptionInfo == nullptr) { // initialized without error
+					try {
 
-					// this will block until all pending events created from main() have completed
-					__hxcpp_main();
+						// this will block until all pending events created from main() have completed
+						__hxcpp_main();
 
-					// we want to keep alive the thread after main() has completed, so we run the event loop until we want to terminate the thread
-					_HaxeEmbedGenerated::mainThreadEndlessLoop();
+						// we want to keep alive the thread after main() has completed, so we run the event loop until we want to terminate the thread
+						HaxeCInterface::endlessEventLoop();
 
-				} catch(Dynamic runtimeException) {
+					} catch(Dynamic runtimeException) {
 
-					// An EndThreadException is used to break out of the event loop, we don\'t need to report this exception
-					if (!runtimeException.IsClass<_HaxeEmbed::EndThreadException>()) {
-						if (haxeExceptionCallback != nullptr) {
-							const char* info = runtimeException->toString().utf8_str();
-							haxeExceptionCallback(info);
+						// An EndThreadException is used to break out of the event loop, we do not need to report this exception
+						if (!runtimeException.IsClass<_HaxeCInterface::EndThreadException>()) {
+							if (haxeExceptionCallback != nullptr) {
+								const char* info = runtimeException->toString().utf8_str();
+								haxeExceptionCallback(info);
+							}
 						}
-					}
 
+					}
 				}
 
 				threadEndSemaphore.Set();
@@ -350,7 +318,7 @@ class HaxeCInterface {
 				hx::NativeAttach autoAttach;
 
 				// queue an exception into the event loop so we break out of the loop and end the thread
-				_HaxeEmbedGenerated::mainThreadEnd();
+				HaxeCInterface::endThread(HaxeCInterface::getMainThread());
 
 				// block until the thread ends, the haxe thread will first execute all immediately pending events
 				threadEndSemaphore.Wait();
@@ -360,31 +328,78 @@ class HaxeCInterface {
 				threadManageMutex.Unlock();
 			}
 
-			${namespace}_runInHaxeMainThread(void (* callback) (void* data), void* data) {
-				// somehow call EntryPoint.runInMainThread()
-			} 
-
 		')
-		+ ctx.functionDeclarations.map(d -> {
-			var signature = switch d.kind {case Function(sig): sig; default: null;};
+		+ ctx.functionDeclarations.map(generateFunctionImplementation).join('\n') + '\n'
+		;
+	}
+
+	static function generateFunctionImplementation(d: CDeclaration) {
+		var signature = switch d.kind {case Function(sig): sig; default: null;};
+		var haxeFunction = functionMap.get(signature.name);
+		var hasReturnValue = !haxeFunction.rootCTypes.ret.match(Ident('void'));
+		var externalThread = if (haxeFunction.field.meta != null) {
+			haxeFunction.field.meta.exists(m -> m.name == 'externalThread');
+		} else false;
+
+		inline function callWithArgs(argStrs: Array<String>) {
+			return '${haxeFunction.hxcppName}(${
+				argStrs.mapi((i, arg) -> {
+					// type cast argument before passing to hxcpp
+					var rootCType = haxeFunction.rootCTypes.args[i];
+					switch rootCType {
+						case Ident(name, _): arg; // basic C type, no cast needed
+						case Pointer(t, _):  '(${CPrinter.printType(rootCType)}) $arg'; // cast to root C type for better handling by hxcpp types
+						case FunctionPointer(name, argTypes, ret, _): 'hx::AnyCast(${arg})'; // functions can use AnyCast to force cast to cpp::Function
+						case InlineStruct(_): arg;
+					}
+				}).join(', ')
+			})';
+		}
+
+		if (externalThread) {
+			// straight call through
+			return (
+				code('
+					HXCPP_EXTERN_CLASS_ATTRIBUTES
+					${CPrinter.printDeclaration(d, false)} {
+						hx::NativeAttach autoAttach;
+						return ${callWithArgs(signature.args.map(a->a.name))};
+					}
+				')
+			);
+		} else {
+			// main thread synchronization implementation
 			var runnerSignature: CFunctionSignature = {
 				name: '__runner__${signature.name}',
 				args: [{type: Pointer(Ident('void')), name: 'data'}],
 				ret: Ident('void')
 			}
 			var lockName = '__lock__${signature.name}';
-			var argStruct: CStruct = {
-				name: '__args__${signature.name}',
-				fields: signature.args
+			var fnDataTypeName = 'FnData__${signature.name}';
+			var fnDataStruct: CStruct = {
+				fields: [
+					{
+						name: 'args',
+						type: InlineStruct({fields: signature.args})
+					}
+				].concat(
+					hasReturnValue ? [{
+						name: 'ret',
+						type: signature.ret
+					}] : []
+				)
 			};
 
+			var fnDataDeclaration: CDeclaration = { kind: Struct(fnDataTypeName, fnDataStruct) }
+
 			return (
-				code(CPrinter.printDeclaration({kind: Struct(argStruct)}) + ';')
+				code(CPrinter.printDeclaration(fnDataDeclaration) + ';')
 				+ code('
 
 					HxSemaphore ${lockName};
 					${CPrinter.printFunctionSignature(runnerSignature)} {
-						// @! todo: call
+						$fnDataTypeName* fnData = ($fnDataTypeName*) data;
+						${hasReturnValue ? 'fnData->ret = ' : ''}${callWithArgs(signature.args.map(a->'fnData->args.${a.name}'))};
 						${lockName}.Set();
 					}
 				')
@@ -395,20 +410,20 @@ class HaxeCInterface {
 				+ code('
 					{
 						hx::NativeAttach autoAttach;
-						// @! todo: check if we\'re already on the haxe main thread and call directly if so
+						if (HaxeCInterface::isMainThread()) {
+							return ${callWithArgs(signature.args.map(a->a.name))};
+						}
 
-						static HxMutex mutex;
-						mutex.Lock();
+						$fnDataTypeName fnData = { {${signature.args.map(a->a.name).join(', ')}} };
 				')
 				+ code('
-						${namespace}_runInHaxeMainThread(${runnerSignature.name}, nullptr);
+						HaxeCInterface::queueOnMainThread(${runnerSignature.name}, &fnData);
 						${lockName}.Wait();
-						mutex.Unlock();
+						${hasReturnValue ? 'return fnData.ret;' : ''}
 					}
 				')
 			);
-		}).join('\n') + '\n'
-		;
+		}
 	}
 
 	/**
@@ -479,6 +494,7 @@ enum CType {
 	Ident(name: String, ?modifiers: Array<CModifier>);
 	Pointer(t: CType, ?modifiers: Array<CModifier>);
 	FunctionPointer(name: String, argTypes: Array<CType>, ret: CType, ?modifiers: Array<CModifier>);
+	InlineStruct(struct: CStruct);
 }
 
 // not exactly specification C but good enough for this purpose
@@ -486,8 +502,12 @@ enum CDeclarationKind {
 	Typedef(type: CType, declarators: Array<String>);
 	Enum(name: String, fields: Array<{name: String, ?value: Int}>);
 	Function(fun: CFunctionSignature);
-	Struct(struct: CStruct);
+	Struct(name: String, struct: CStruct);
 	Variable(name: String, type: CType);
+}
+
+enum CCustomMeta {
+	CppFunction(str: String);
 }
 
 typedef CDeclaration = {
@@ -496,7 +516,6 @@ typedef CDeclaration = {
 }
 
 typedef CStruct = {
-	name: String,
 	fields: Array<{name: String, type: CType}>
 }
 
@@ -536,6 +555,9 @@ class CPrinter {
 				printType(t) + '*' + (hasModifiers(modifiers) ? (' ' + printModifiers(modifiers)) : '');
 			case FunctionPointer(name, argTypes, ret):
 				'${printType(ret)} (* $name) (${argTypes.length > 0 ? argTypes.map(printType).join(', ') : 'void'})';
+			case InlineStruct(struct):
+				'struct {${printFields(struct.fields, false)}}';
+
 		}
 	}
 
@@ -549,15 +571,24 @@ class CPrinter {
 					'enum $name {\n'
 					+ fields.map(f -> '\t' + f.name + (f.value != null ? ' = ${f.value}' : '')).join(',\n') + '\n'
 					+ '}';
-				case Struct({name: name, fields: fields}):
+				case Struct(name, {fields: fields}):
 					'struct $name {\n'
-					+ fields.map(f -> '\t${printType(f.type)} ${f.name}').join(';\n') + ';\n'
+					+ printFields(fields, true)
 					+ '}';
 				case Function(sig):
 					printFunctionSignature(sig);
 				case Variable(name, type):
 					'${printType} $name';
 		}
+	}
+
+	public static function printFields(fields: Array<{name: String, type: CType}>, newlines: Bool) {
+		var sep = (newlines?'\n':' ');
+		return fields.map(f -> '${newlines?'\t':''}${printField(f)}').join(sep) + (newlines?'\n':'');
+	}
+
+	public static function printField(f: {name: String, type: CType}) {
+		return '${printType(f.type)} ${f.name};';
 	}
 
 	public static function printFunctionSignature(signature: CFunctionSignature) {
@@ -599,7 +630,9 @@ class CConverterContext {
 	
 	final declarationPrefix: String;
 	final generateTypedef: Bool;
+	final generateTypedefForFunctions: Bool;
 	final generateTypedefWithTypeParameters: Bool;
+	final generateEnums: Bool;
 
 	/**
 		namespace is used to prefix types
@@ -607,12 +640,16 @@ class CConverterContext {
 	public function new(options: {
 		?declarationPrefix: String,
 		?generateTypedef: Bool,
+		?generateTypedefForFunctions: Bool,
 		/** type parameter name is appended to the typedef ident, this makes for long type names so it's disabled by default **/
 		?generateTypedefWithTypeParameters: Bool,
+		?generateEnums: Bool,
 	} = null) {
 		this.declarationPrefix = (options != null && options.declarationPrefix != null) ? options.declarationPrefix : '';
 		this.generateTypedef = (options != null && options.generateTypedef != null) ? options.generateTypedef : true;
+		this.generateTypedefForFunctions = (options != null && options.generateTypedefForFunctions != null) ? options.generateTypedefForFunctions : true;
 		this.generateTypedefWithTypeParameters = (options != null && options.generateTypedefWithTypeParameters != null) ? options.generateTypedefWithTypeParameters : false;
+		this.generateEnums = (options != null && options.generateEnums != null) ? options.generateEnums : true;
 	}
 
 	public function addFunctionDeclaration(name: String, args: Array<FunctionArg>, ret: ComplexType, doc: Null<String>, pos: Position) {
@@ -691,18 +728,18 @@ class CConverterContext {
 					}
 					Ident(ident);
 				} else {
-					Context.fatalError('Could not convert type "${TypeTools.toString(type)}" to C representation', pos);
+					Context.error('Could not convert type "${TypeTools.toString(type)}" to C representation', pos);
 				}
 
 			case TFun(args, ret):
 				if (allowBareFnTypes) {
 					getFunctionCType(args, ret, pos);
 				} else {
-					Context.fatalError("Callbacks must be wrapped in cpp.Callable<T> when exposing to C", pos);
+					Context.error("Callbacks must be wrapped in cpp.Callable<T> when exposing to C", pos);
 				}
 
 			case TAnonymous(a):
-				Context.fatalError("Haxe structures are not supported when exposing to C, try using an extern for a C struct instead", pos);
+				Context.error("Haxe structures are not supported when exposing to C, try using an extern for a C struct instead", pos);
 
 			case TAbstract(_.get() => t, _):
 				var keyCType = tryConvertKeyType(type, allowBareFnTypes, pos);
@@ -714,7 +751,7 @@ class CConverterContext {
 						var underlyingRootType = TypeTools.followWithAbstracts(t.type, false);
 						Context.unify(underlyingRootType, Context.resolveType(macro :Int, Context.currentPos()));
 					} else false;
-					if (isIntEnumAbstract) {
+					if (isIntEnumAbstract && generateEnums) {
 						// c-enums can be converted to ints
 						getEnumCType(type, pos);
 					} else {
@@ -746,13 +783,13 @@ class CConverterContext {
 				convertType(f(), allowBareFnTypes, pos);
 
 			case TDynamic(t):
-				Context.fatalError("Dynamic is not supported when exposing to C", pos);
+				Context.error("Dynamic is not supported when exposing to C", pos);
 			
 			case TMono(t):
-				Context.fatalError("Explicit type is required when exposing to C", pos);
+				Context.error("Explicit type is required when exposing to C", pos);
 
 			case TEnum(t, params):
-				Context.fatalError("Exposing enum types to C is not supported, try using an enum abstract over Int", pos);
+				Context.error("Exposing enum types to C is not supported, try using an enum abstract over Int", pos);
 		}
 	}
 
@@ -786,9 +823,9 @@ class CConverterContext {
 				**/
 
 				case {t: {pack: [], name: "Null"}}:
-					Context.fatalError("Null<T> is not supported for C export", pos);
+					Context.error("Null<T> is not supported for C export", pos);
 				case {t: {pack: [], name: "Array"}}:
-					Context.fatalError("Array<T> is not supported for C export, try using cpp.Pointer<T> instead", pos);
+					Context.error("Array<T> is not supported for C export, try using cpp.Pointer<T> instead", pos);
 
 				case {t: {pack: [], name: 'Void' | 'void'}}: Ident('void');
 				case {t: {pack: [], name: "Bool"}}: Ident("bool");
@@ -825,7 +862,7 @@ class CConverterContext {
 					"VarArg" |
 					"FastIterator"
 				}}:
-					Context.fatalError('cpp.$name is not supported for C export', pos);
+					Context.error('cpp.$name is not supported for C export', pos);
 
 				// if the type is in the cpp package and has :native(ident), use that
 				// this isn't ideal because the relevant C header may not be included
@@ -872,6 +909,7 @@ class CConverterContext {
 			case Ident(name, modifiers): Ident(name, _setModifier(modifiers));
 			case Pointer(type, modifiers): Pointer(type, _setModifier(modifiers));
 			case FunctionPointer(name, argTypes, ret, modifiers): FunctionPointer(name, argTypes, ret, _setModifier(modifiers));
+			case InlineStruct(struct): cType;
 		}
 	}
 
@@ -923,19 +961,23 @@ class CConverterContext {
 
 	function getFunctionCType(args: Array<{name: String, opt: Bool, t: Type}>, ret: Type, pos: Position): CType {
 		// optional type parameters are not supported
+
 		var ident = 'function_' + args.map(arg -> typeDeclarationIdent(arg.t)).concat([typeDeclarationIdent(ret)]).join('_');
-		if (!declaredTypeIdentifiers.exists(ident)) {
-			
-			var funcPointer: CType = FunctionPointer(
-				ident,
-				args.map(arg -> convertType(arg.t, false, pos)),
-				convertType(ret, false, pos)
-			);
-			typeDeclarations.push({kind: Typedef(funcPointer, []) });
-			declaredTypeIdentifiers.set(ident, true);
-			
+		var funcPointer: CType = FunctionPointer(
+			ident,
+			args.map(arg -> convertType(arg.t, false, pos)),
+			convertType(ret, false, pos)
+		);
+
+		if (generateTypedefForFunctions) {
+			if (!declaredTypeIdentifiers.exists(ident)) {
+				typeDeclarations.push({kind: Typedef(funcPointer, []) });
+				declaredTypeIdentifiers.set(ident, true);			
+			}
+			return Ident(ident);
+		} else {
+			return funcPointer;
 		}
-		return Ident(ident);
 	}
 
 	// generate a type identifier for declaring a haxe type in C
@@ -1105,6 +1147,55 @@ class CodeTools {
 			if (~/^[ \t]*$/.match(l)) l else t + l;
 		}).join('\n');
 		return str;
+	}
+
+}
+
+#else
+
+@:noCompletion
+@:keep
+private class EndThreadException extends haxe.Exception {}
+
+@:nativeGen
+@:keep
+@:noCompletion
+class HaxeCInterface {
+
+	static inline function getMainThread(): sys.thread.Thread {
+		return @:privateAccess haxe.EntryPoint.mainThread;
+	}
+
+	static public function isMainThread(): Bool {
+		return sys.thread.Thread.current() == getMainThread();
+	}
+
+	static public function queueOnMainThread(fn: cpp.Callable<cpp.Star<cpp.Void> -> Void>, data: cpp.Star<cpp.Void>): Void {
+		haxe.EntryPoint.runInMainThread(() -> {
+			fn(data);
+		});
+	}
+
+	/**
+		Keeps the main thread event loop alive (even after all events and promises are exhausted)
+	**/
+	@:noCompletion
+	static public function endlessEventLoop() {
+		var current = sys.thread.Thread.current();
+		while (true) {
+			current.events.loop();
+			current.events.wait();
+		}
+	}
+
+	/**
+		Break out of the event loop by throwing an end-thread exception
+	**/
+	@:noCompletion
+	static public function endThread(thread: sys.thread.Thread) {
+		thread.events.run(() -> {
+			throw new EndThreadException('END-THREAD');
+		});
 	}
 
 }
