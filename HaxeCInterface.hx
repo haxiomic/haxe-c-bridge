@@ -1,6 +1,6 @@
 #if macro
 
-#if ((display || display_details || target.name != cpp) && false)
+#if (display || display_details || target.name != cpp)
 // fast path for when code gen isn't required
 class HaxeCInterface {
 	public static function build() {
@@ -33,7 +33,7 @@ class HaxeCInterface {
 	static final noOutput = Sys.args().has('--no-output');
 	static final printer = new Printer();
 	
-	static var isOnAfterGenerateSetup = false;
+	static var isFileGenCallbackSetup = false;
 
 	static final libName = determineLibName();
 	static final compilerOutputDir = Compiler.getOutput();
@@ -151,9 +151,9 @@ class HaxeCInterface {
 			}
 		}
 
-		if (!isOnAfterGenerateSetup) {
+		if (!isFileGenCallbackSetup) {
 			if (!noOutput) {
-				Context.onAfterGenerate(() -> {
+				Context.onAfterTyping(_ -> {
 					var header = generateHeader(cConversionContext, libName);
 					var implementation = generateImplementation(cConversionContext, libName);
 
@@ -165,7 +165,7 @@ class HaxeCInterface {
 				});
 			}
 
-			isOnAfterGenerateSetup = true;
+			isFileGenCallbackSetup = true;
 		}
 
 		return fields.concat(newFields);
