@@ -157,11 +157,16 @@ class HaxeEmbed {
 					var header = generateHeader(cConversionContext, libName);
 					var implementation = generateImplementation(cConversionContext, libName);
 
-					if (!FileSystem.exists(compilerOutputDir)) {
-						FileSystem.createDirectory(compilerOutputDir);
+					function saveFile(path: String, content: String) {
+						var directory = Path.directory(path);
+						if (!FileSystem.exists(directory)) {
+							FileSystem.createDirectory(directory);
+						}
+						sys.io.File.saveContent(path, content);	
 					}
-					sys.io.File.saveContent(Path.join([compilerOutputDir, headerPath]), header);
-					sys.io.File.saveContent(Path.join([compilerOutputDir, implementationPath]), implementation);
+
+					saveFile(Path.join([compilerOutputDir, headerPath]), header);
+					saveFile(Path.join([compilerOutputDir, implementationPath]), implementation);
 				});
 			}
 
