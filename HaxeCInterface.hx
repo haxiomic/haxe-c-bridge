@@ -1,6 +1,6 @@
 #if macro
 
-#if (display || display_details || target.name != cpp)
+#if ((display || display_details || target.name != cpp) && false)
 // fast path for when code gen isn't required
 class HaxeCInterface {
 	public static function build() {
@@ -36,6 +36,10 @@ class HaxeCInterface {
 	static var isOnAfterGenerateSetup = false;
 
 	static final libName = determineLibName();
+	static final compilerOutputDir = Compiler.getOutput();
+	// paths relative to the compiler output directory
+	static final headerPath = Path.join(['$libName.h']);
+	static final implementationPath = Path.join(['src', '__${libName}__.cpp']);
 
 	static final implementationHeaders = new Array<CInclude>();
 	static final cConversionContext = new CConverterContext({
@@ -57,12 +61,26 @@ class HaxeCInterface {
 	static public function build(?namespace: String) {
 		var fields = Context.getBuildFields();
 
-		if (!isOnAfterGenerateSetup) {
-			setupOnAfterGenerate();
-		}
-
 		// resolve runtime HaxeCInterface class to make sure it's generated
-		Context.resolveType(macro :HaxeCInterface, Context.currentPos());
+		// add @:buildXml to include generated code
+		var HaxeCInterfaceType = Context.resolveType(macro :HaxeCInterface, Context.currentPos());
+		switch HaxeCInterfaceType {
+			case TInst(_.get().meta => meta, params):
+				if (!meta.has(':buildXml')) {
+					meta.add(':buildXml', [{
+						expr: EConst(CString('
+							<!-- HaxeCInterface -->
+							<files id="haxe">
+								<file name="$implementationPath">
+									<depend name="$headerPath"/>
+								</file>
+							</files>
+						')),
+						pos: Context.currentPos()
+					}], Context.currentPos());
+				}
+			default: throw 'Internal error';
+		}
 
 		var cls = Context.getLocalClass().get();
 
@@ -77,8 +95,8 @@ class HaxeCInterface {
 		var nativeHxcppName = nativeName + (isNativeGen ? '' : '_obj');
 
 		// determine the hxcpp generated header path for this class
-		var headerPath = nativeName.split('.');
-		implementationHeaders.push({path: Path.join(headerPath) + '.h', quoted: false});
+		var typeHeaderPath = nativeName.split('.');
+		implementationHeaders.push({path: Path.join(typeHeaderPath) + '.h', quoted: false});
 
 		// prefix all functions with lib name and class path
 		var functionPrefix =
@@ -133,34 +151,26 @@ class HaxeCInterface {
 			}
 		}
 
-		// add to :buildXml 
-			// - include C->C++ binding implementation
-			// - copy generated header to include/
+		if (!isOnAfterGenerateSetup) {
+			if (!noOutput) {
+				Context.onAfterGenerate(() -> {
+					var header = generateHeader(cConversionContext, libName);
+					var implementation = generateImplementation(cConversionContext, libName);
+
+					if (!FileSystem.exists(compilerOutputDir)) {
+						FileSystem.createDirectory(compilerOutputDir);
+					}
+					sys.io.File.saveContent(Path.join([compilerOutputDir, headerPath]), header);
+					sys.io.File.saveContent(Path.join([compilerOutputDir, implementationPath]), implementation);
+				});
+			}
+
+			isOnAfterGenerateSetup = true;
+		}
 
 		return fields.concat(newFields);
 	}
 
-	static function setupOnAfterGenerate() {
-		if (!noOutput) {
-			Context.onAfterGenerate(() -> {
-				var outputDirectory = Compiler.getOutput(); 
-
-				var header = generateHeader(cConversionContext, libName);
-				var headerPath = Path.join([outputDirectory, '$libName.h']);
-
-				var implementation = generateImplementation(cConversionContext, libName);
-				var implementationPath = Path.join([outputDirectory, 'src', '__${libName}__.cpp']);
-
-				if (!FileSystem.exists(outputDirectory)) {
-					FileSystem.createDirectory(outputDirectory);
-				}
-				sys.io.File.saveContent(headerPath, header);
-				sys.io.File.saveContent(implementationPath, implementation);
-			});
-		}
-
-		isOnAfterGenerateSetup = true;
-	}
 
 	static function generateHeader(ctx: CConverterContext, namespace: String) {
 		return code('
@@ -483,11 +493,6 @@ class HaxeCInterface {
 		// replace empty string with _
 		str = str == '' ? '_' : str;
 		return str;
-	}
-
-	static final _voidType = Context.getType('Void');
-	static function isVoid(ct: ComplexType) {
-		return Context.unify(ComplexTypeTools.toType(ct), _voidType);
 	}
 
 }
@@ -1029,85 +1034,6 @@ class CConverterContext {
 
 }
 
-class ComplexTypeMap {
-
-	/**
-		Transforms a ComplexType recursively
-		Does not explore expressions contained within types (like anon fields)
-	**/
-	static public function map(complexType: Null<ComplexType>, f: ComplexType -> ComplexType): ComplexType {
-		if (complexType == null) {
-			return null;
-		}
-
-		return switch complexType {
-			case TFunction(args, ret):
-				f(TFunction(args.map(a -> map(a, f)), map(ret, f)));
-			case TParent(t):
-				f(TParent(map(t, f)));
-			case TOptional(t):
-				f(TOptional(map(t, f)));
-			case TNamed(n, t):
-				f(TNamed(n, map(t, f)));
-			case TIntersection(types):
-				f(TIntersection(types.map(t -> map(t, f))));
-			case TAnonymous(fields):
-				f(TAnonymous(fields.map(field -> mapField(field, f))));
-			case TExtend(ap, fields):
-				f(TExtend(ap.map(p -> mapTypePath(p, f)), fields.map(field -> mapField(field, f))));
-			case TPath(p):
-				f(TPath(mapTypePath(p, f)));
-		}
-	}
-
-	static public function mapTypePath(typePath: TypePath, f: ComplexType -> ComplexType): TypePath {
-		return {
-			pack: typePath.pack,
-			name: typePath.name,
-			sub: typePath.sub,
-			params: typePath.params != null ? typePath.params.map(tp -> switch tp {
-				case TPType(t): TPType(map(t, f));
-				case TPExpr(e): TPExpr(e);
-			}) : null,
-		}
-	}
-
-	static public function mapArg(arg: FunctionArg, f: ComplexType -> ComplexType): FunctionArg {
-		return {
-			name: arg.name,
-			meta: arg.meta,
-			value: arg.value,
-			opt: arg.opt,
-			type: map(arg.type, f)
-		}
-	}
-
-	static public function mapFunction(fun: Function, f: ComplexType -> ComplexType): Function {
-		return {
-			params: fun.params,
-			expr: fun.expr,
-			args: fun.args.map(a -> mapArg(a, f)),
-			ret: map(fun.ret, f),
-		}
-	}
-
-	static public function mapField(field: Field, f: ComplexType -> ComplexType): Field {
-		return {
-			name: field.name,
-			meta: field.meta,
-			pos: field.pos,
-			access: field.access,
-			doc: field.doc,
-			kind: switch field.kind {
-				case FVar(t, e): FVar(map(t, f), e);
-				case FFun(fun): FFun(mapFunction(fun, f));
-				case FProp(get, set, t, e):FProp(get, set, map(t, f), e);
-			}
-		};
-	}
-
-}
-
 class CodeTools {
 
 	static public function code(str: String) {
@@ -1160,6 +1086,8 @@ class CodeTools {
 #end // (display || display_details || target.name != cpp)
 
 #else
+
+// runtime types
 
 @:noCompletion
 @:keep
