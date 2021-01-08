@@ -452,12 +452,12 @@ class HaxeCInterface {
 	/**
 		We determine a project name to be the `--main` startup class or the first specified class-path
 
-		The user can override this with `-D haxe-embed-name=ExampleName`
+		The user can override this with `-D c-api-name=ExampleName`
 
 		This isn't rigorously defined but hopefully will produced nicely namespaced and unsurprising function names
 	**/
 	static function determineLibName(): Null<String> {
-		var overrideName = Context.definedValue('haxe-embed-name');
+		var overrideName = Context.definedValue('c-api-name');
 		if (overrideName != null && overrideName != '') {
 			return safeIdent(overrideName);
 		}
