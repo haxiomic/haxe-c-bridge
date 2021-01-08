@@ -33,6 +33,8 @@ enum abstract IndirectlyReferencedEnum(Int) {
 	var BBB;
 }
 
+typedef EnumAlias = IntEnumAbstract;
+
 enum abstract StringEnumAbstract(String) {
 	var A = "AAA";
 	var B = "BBB";
@@ -86,7 +88,7 @@ class PublicApi {
 	static public function optional(?single: Single): Void { }
 	static public function badOptional(?opt: Single, notOpt: Single): Void { }
 
-	static public function enumTypes(e: IntEnumAbstract, s: StringEnumAbstract, i: Star<IndirectlyReferencedEnum>, ii: Star<Star<IndirectlyReferencedEnum>>): Void { }
+	static public function enumTypes(e: IntEnumAbstract, s: StringEnumAbstract, a: EnumAlias, i: Star<IndirectlyReferencedEnum>, ii: Star<Star<IndirectlyReferencedEnum>>): Void { }
 	static public function cppCoreTypes(sizet: SizeT, char: cpp.Char, constCharStar: cpp.ConstCharStar): Void { }
 
 	static public function add(a: Int, b: Int): Int return a + b;
