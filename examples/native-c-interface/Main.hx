@@ -5,8 +5,6 @@ import cpp.Pointer;
 import cpp.SizeT;
 import cpp.Star;
 import examplepack.ExampleClass;
-import haxe.EntryPoint;
-import sys.thread.Thread;
 
 class Main {
 
@@ -29,8 +27,9 @@ enum abstract IntEnumAbstract(Int) {
 }
 
 enum abstract IndirectlyReferencedEnum(Int) {
-	var AAA;
+	var AAA = 9;
 	var BBB;
+	var CCC = 8;
 }
 
 typedef EnumAlias = IntEnumAbstract;
