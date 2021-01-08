@@ -259,13 +259,14 @@ class HaxeCInterface {
 
 			extern "C" void __hxcpp_main();
 
-			bool threadInitialized = false;
-			const char* threadInitExceptionInfo = nullptr;
-			HxSemaphore threadInitSemaphore;
-			HxSemaphore threadEndSemaphore;
-			HxMutex threadManageMutex;
-
-			HaxeExceptionCallback haxeExceptionCallback = nullptr;
+			namespace {
+				bool threadInitialized = false;
+				const char* threadInitExceptionInfo = nullptr;
+				HxSemaphore threadInitSemaphore;
+				HxSemaphore threadEndSemaphore;
+				HxMutex threadManageMutex;
+				HaxeExceptionCallback haxeExceptionCallback = nullptr;
+			}
 
 			THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 				// reset the exception info
@@ -368,11 +369,19 @@ class HaxeCInterface {
 			haxeFunction.field.meta.exists(m -> m.name == 'externalThread');
 		} else false;
 
-		inline function callWithArgs(argStrs: Array<String>) {
+		// rename signature args to a1, a2, a3 etc, this is to avoid possible conflict with local function variables
+		var signature: CFunctionSignature = {
+			name: signature.name,
+			args: signature.args.mapi((i, arg) -> {name: 'a$i', type: arg.type}),
+			ret: signature.ret,
+		}
+		var d: CDeclaration = { kind: Function(signature) }
+
+		inline function callWithArgs(argNames: Array<String>) {
 			return '${haxeFunction.hxcppName}(${
-				argStrs.mapi((i, arg) -> {
-					// type cast argument before passing to hxcpp
+				argNames.mapi((i, arg) -> {
 					var rootCType = haxeFunction.rootCTypes.args[i];
+					// type cast argument before passing to hxcpp
 					switch rootCType {
 						case Ident(name, _): arg; // basic C type, no cast needed
 						case Pointer(t, _):  '(${CPrinter.printType(rootCType)}) $arg'; // cast to root C type for better handling by hxcpp types
@@ -396,19 +405,17 @@ class HaxeCInterface {
 			);
 		} else {
 			// main thread synchronization implementation
-			var runnerSignature: CFunctionSignature = {
-				name: '__runner__${signature.name}',
-				args: [{type: Pointer(Ident('void')), name: 'data'}],
-				ret: Ident('void')
-			}
-			var lockName = '__lock__${signature.name}';
-			var fnDataTypeName = 'FnData__${signature.name}';
-			var fnDataName = '__fnData__';
+			var fnDataTypeName = 'Data';
+			var fnDataName = 'data';
 			var fnDataStruct: CStruct = {
 				fields: [
 					{
 						name: 'args',
 						type: InlineStruct({fields: signature.args})
+					},
+					{
+						name: 'lock',
+						type: Ident('HxSemaphore')
 					}
 				].concat(
 					hasReturnValue ? [{
@@ -421,33 +428,39 @@ class HaxeCInterface {
 			var fnDataDeclaration: CDeclaration = { kind: Struct(fnDataTypeName, fnDataStruct) }
 
 			return (
-				code(CPrinter.printDeclaration(fnDataDeclaration) + ';')
-				+ code('
-
-					HxSemaphore ${lockName};
-					${CPrinter.printFunctionSignature(runnerSignature)} {
-						$fnDataTypeName* $fnDataName = ($fnDataTypeName*) data;
-						${hasReturnValue ? '$fnDataName->ret = ' : ''}${callWithArgs(signature.args.map(a->'$fnDataName->args.${a.name}'))};
-						${lockName}.Set();
-					}
-				')
-				+ code('
+				code('
 					HXCPP_EXTERN_CLASS_ATTRIBUTES
 				')
-				+ CPrinter.printDeclaration(d, false)
-				+ code('
-					{
+				+ CPrinter.printDeclaration(d, false) + ' {\n'
+				+ indent(1, 
+					code('
 						hx::NativeAttach autoAttach;
 						if (HaxeCInterface::isMainThread()) {
 							return ${callWithArgs(signature.args.map(a->a.name))};
 						}
 
+						// queue a callback to execute ${haxeFunction.field.name}() on the main thread and wait until execution completes
+					')
+					+ CPrinter.printDeclaration(fnDataDeclaration) + ';\n'
+					+ code('
+
+						struct Callback {
+							static void run(void* p) {
+								$fnDataTypeName* $fnDataName = ($fnDataTypeName*) p;
+								${hasReturnValue ? '$fnDataName->ret = ' : ''}${callWithArgs(signature.args.map(a->'$fnDataName->args.${a.name}'))};
+								$fnDataName->lock.Set();
+							}
+						};
+
 						$fnDataTypeName $fnDataName = { {${signature.args.map(a->a.name).join(', ')}} };
-				')
+						HaxeCInterface::queueOnMainThread(Callback::run, &$fnDataName);
+						$fnDataName.lock.Wait();
+					')
+					+ if (hasReturnValue) code('
+						return $fnDataName.ret;
+					') else ''
+				)
 				+ code('
-						HaxeCInterface::queueOnMainThread(${runnerSignature.name}, &$fnDataName);
-						${lockName}.Wait();
-						${hasReturnValue ? 'return $fnDataName.ret;' : ''}
 					}
 				')
 			);
