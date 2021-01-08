@@ -38,7 +38,6 @@ enum abstract StringEnumAbstract(String) {
 	var B = "BBB";
 }
 
-
 enum RegularEnum {
 	A;
 	B;
@@ -104,12 +103,19 @@ class PublicApi {
 		@param b some string
 		@returns void
 	**/
-	static public function voidRtn(a: Int, b: String): Void {
-		trace('voidRtn()');
-	}
+	static public function voidRtn(a: Int, b: String): Void {}
 
 	static public function noArgsNoReturn(): Void {}
 
+	/** when called externally from C this function will be executed synchronously on the main thread **/
+	static public function callInMainThread(f64: cpp.Float64): Bool {
+		return HaxeCInterface.isMainThread();
+	}
+
+	/**
+		When called externally from C this function will be executed on the calling thread.
+		Beware: you cannot interact with the rest of your code without first synchronizing with the main thread (or risk crashes)
+	**/
 	@externalThread
 	static public function callInExternalThread(f64: cpp.Float64): Bool {
 		return HaxeCInterface.isMainThread();
