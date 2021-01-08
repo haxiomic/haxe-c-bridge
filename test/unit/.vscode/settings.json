@@ -1,0 +1,6 @@
+{
+	"triggerTaskOnSave.selectedTask": "haxe: active configuration",
+	"triggerTaskOnSave.tasks": {
+		"haxe: active configuration": ["*.hx"]
+	}
+}
