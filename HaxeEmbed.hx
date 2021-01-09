@@ -359,7 +359,7 @@ class HaxeEmbed {
 				hx::NativeAttach autoAttach;
 
 				// queue an exception into the event loop so we break out of the loop and end the thread
-				HaxeEmbed::endThread(HaxeEmbed::getMainThread());
+				HaxeEmbed::endMainThread();
 
 				// block until the thread ends, the haxe thread will first execute all immediately pending events
 				threadEndSemaphore.Wait();
@@ -1137,10 +1137,10 @@ private class EndThreadException extends haxe.Exception {}
 class HaxeEmbed {
 
 	static inline function getMainThread(): sys.thread.Thread {
-		return @:privateAccess haxe.EntryPoint.mainThread;
+		return Internal.mainThread;
 	}
 
-	static public function isMainThread(): Bool {
+	static public inline function isMainThread(): Bool {
 		return sys.thread.Thread.current() == getMainThread();
 	}
 
@@ -1157,8 +1157,12 @@ class HaxeEmbed {
 	static public function endlessEventLoop() {
 		var current = sys.thread.Thread.current();
 		while (true) {
+			#if (haxe_ver >= "4.2.0")
 			current.events.loop();
 			current.events.wait();
+			#else
+			haxe.EntryPoint.run();
+			#end
 		}
 	}
 
@@ -1166,12 +1170,17 @@ class HaxeEmbed {
 		Break out of the event loop by throwing an end-thread exception
 	**/
 	@:noCompletion
-	static public function endThread(thread: sys.thread.Thread) {
-		thread.events.run(() -> {
+	static public function endMainThread() {
+		haxe.EntryPoint.runInMainThread(() -> {
 			throw new EndThreadException('END-THREAD');
 		});
 	}
 
+}
+
+private class Internal {
+	// initialized during main thread boot
+	static public var mainThread: sys.thread.Thread = sys.thread.Thread.current();
 }
 
 #end
