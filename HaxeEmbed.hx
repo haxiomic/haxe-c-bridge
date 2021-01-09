@@ -225,11 +225,12 @@ class HaxeEmbed {
 				/**
 				 * Ends the haxe thread after it finishes processing pending events (events scheduled in the future will not be executed). Once ended, it cannot be restarted
 				 * 
-				 * Blocks until the haxe thread has finished
+				 * If the haxe thread is active it will blocks until the haxe thread has finished (unless executed on the haxe main thread)
 				 * 
 				 * Thread-safety: May be called on a different thread to `${namespace}_startHaxeThread`
+				 * @returns `true` if thread was stopped synchronously or `false` otherwise – this might be because the haxe thread was not running or another thread has already called `stopHaxeThread()`
 				 */
-				void ${namespace}_stopHaxeThread();
+				bool ${namespace}_stopHaxeThread();
 
 		')
 
@@ -266,7 +267,8 @@ class HaxeEmbed {
 			extern "C" void __hxcpp_main();
 
 			namespace {
-				std::atomic<bool> threadActive = { false };
+				std::atomic<bool> threadStarted = { false };
+				std::atomic<bool> threadRunning = { false };
 				// once haxe statics are initialized we cannot clear them for a clean restart
 				std::atomic<bool> staticsInitialized = { false };
 
@@ -286,6 +288,7 @@ class HaxeEmbed {
 
 			THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 				HX_TOP_OF_STACK
+				threadRunning = true;
 
 				HaxeThreadData* threadData = (HaxeThreadData*) data;
 				threadData->initExceptionInfo = nullptr;
@@ -308,8 +311,6 @@ class HaxeEmbed {
 				threadInitSemaphore.Set();
 
 				if (staticsInitialized) { // initialized without error
-					threadActive = true;
-
 					bool exitRequested = false;
 					if (firstRun) {
 						// this will block until all pending events created from main() have completed
@@ -320,10 +321,9 @@ class HaxeEmbed {
 					if (!exitRequested) {
 						HaxeEmbed::endlessEventLoop(haxeExceptionCallback);
 					}
-
-					threadActive = false;
 				}
 
+				threadRunning = false;
 				threadEndSemaphore.Set();
 
 				THREAD_FUNC_RET
@@ -331,30 +331,26 @@ class HaxeEmbed {
 
 			HXCPP_EXTERN_CLASS_ATTRIBUTES
 			const char* ${namespace}_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
-				threadManageMutex.Lock();
-
-				if (threadActive) {
-					static const char* info = "haxe thread already running";
-					return info;
-				}
-
-				if (staticsInitialized) {
-					static const char* info = "haxe thread cannot be restarted once stopped";
-					return info;
-				}
-
 				HaxeThreadData threadData = {
 					.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? defaultExceptionHandler : unhandledExceptionCallback,
 					.initExceptionInfo = nullptr,
 				};
 
-				// startup the haxe main thread
-				HxCreateDetachedThread(haxeMainThreadFunc, &threadData);
+				{
+					// mutex prevents two threads calling this function from being able to start two haxe threads
+					AutoLock lock(threadManageMutex);
+					if (!threadStarted) {
+						// startup the haxe main thread
+						HxCreateDetachedThread(haxeMainThreadFunc, &threadData);
 
-				// wait until the thread is initialized and ready
-				threadInitSemaphore.Wait();
+						threadStarted = true;
 
-				threadManageMutex.Unlock();
+						// wait until the thread is initialized and ready
+						threadInitSemaphore.Wait();
+					} else {
+						threadData.initExceptionInfo = "haxe thread cannot be started twice";
+					}
+				}
 				
 				if (threadData.initExceptionInfo != nullptr) {
 					${namespace}_stopHaxeThread();
@@ -369,20 +365,23 @@ class HaxeEmbed {
 			}
 
 			HXCPP_EXTERN_CLASS_ATTRIBUTES
-			void ${namespace}_stopHaxeThread() {
-				threadManageMutex.Lock();
-
-				if (!threadActive) return;
-
-				hx::NativeAttach autoAttach;
-
-				// queue an exception into the event loop so we break out of the loop and end the thread
-				HaxeEmbed::endMainThread();
-
-				// block until the thread ends, the haxe thread will first execute all immediately pending events
-				threadEndSemaphore.Wait();
-
-				threadManageMutex.Unlock();
+			bool ${namespace}_stopHaxeThread() {
+				// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on threadEndSemaphore
+				// the idea here is only one stopHaxeThread can running at a time, if stop has already been called, subsequent stops will return immediately
+				bool stopped = false;
+				if (threadManageMutex.TryLock()) {
+					if (threadRunning) {
+						hx::NativeAttach autoAttach;
+						bool isMain = HaxeEmbed::isMainThread();
+						HaxeEmbed::endMainThread();
+						if (!isMain) {
+							threadEndSemaphore.Wait();
+						}
+					}
+					stopped = true;
+					threadManageMutex.Unlock();
+				}
+				return stopped;
 			}
 
 		')
@@ -1165,6 +1164,16 @@ class HaxeEmbed {
 		return sys.thread.Thread.current() == getMainThread();
 	}
 
+	static public function queueOnMainThread(fn: cpp.Callable<cpp.Star<cpp.Void> -> Void>, data: cpp.Star<cpp.Void>): Void {
+		haxe.EntryPoint.runInMainThread(() -> {
+			fn(data);
+		});
+	}
+
+	/**
+		Executes the passed main function (which is expected to block while processing events)
+		@return `true` if thread exit was requested during execution
+	**/
 	static public function runUserMain(main: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>): Bool {
 		try main()
 		catch (e: EndThreadException) {
@@ -1173,12 +1182,6 @@ class HaxeEmbed {
 			onUnhandledException(Std.string(e));
 		}
 		return false;
-	}
-
-	static public function queueOnMainThread(fn: cpp.Callable<cpp.Star<cpp.Void> -> Void>, data: cpp.Star<cpp.Void>): Void {
-		haxe.EntryPoint.runInMainThread(() -> {
-			fn(data);
-		});
 	}
 
 	/**

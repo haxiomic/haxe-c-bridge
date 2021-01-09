@@ -51,11 +51,12 @@ extern "C" {
 	/**
 	 * Ends the haxe thread after it finishes processing pending events (events scheduled in the future will not be executed). Once ended, it cannot be restarted
 	 * 
-	 * Blocks until the haxe thread has finished
+	 * If the haxe thread is active it will blocks until the haxe thread has finished (unless executed on the haxe main thread)
 	 * 
 	 * Thread-safety: May be called on a different thread to `HaxeLib_startHaxeThread`
+	 * @returns `true` if thread was stopped synchronously or `false` otherwise – this might be because the haxe thread was not running or another thread has already called `stopHaxeThread() `
 	 */
-	void HaxeLib_stopHaxeThread();
+	bool HaxeLib_stopHaxeThread();
 
 	/**
 	 * Some doc

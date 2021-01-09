@@ -18,7 +18,8 @@
 extern "C" void __hxcpp_main();
 
 namespace {
-	std::atomic<bool> threadActive = { false };
+	std::atomic<bool> threadStarted = { false };
+	std::atomic<bool> threadRunning = { false };
 	// once haxe statics are initialized we cannot clear them for a clean restart
 	std::atomic<bool> staticsInitialized = { false };
 
@@ -38,6 +39,7 @@ namespace {
 
 THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 	HX_TOP_OF_STACK
+	threadRunning = true;
 
 	HaxeThreadData* threadData = (HaxeThreadData*) data;
 	threadData->initExceptionInfo = nullptr;
@@ -60,8 +62,6 @@ THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 	threadInitSemaphore.Set();
 
 	if (staticsInitialized) { // initialized without error
-		threadActive = true;
-
 		bool exitRequested = false;
 		if (firstRun) {
 			// this will block until all pending events created from main() have completed
@@ -72,10 +72,9 @@ THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 		if (!exitRequested) {
 			HaxeEmbed::endlessEventLoop(haxeExceptionCallback);
 		}
-
-		threadActive = false;
 	}
 
+	threadRunning = false;
 	threadEndSemaphore.Set();
 
 	THREAD_FUNC_RET
@@ -83,30 +82,26 @@ THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
 const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
-	threadManageMutex.Lock();
-
-	if (threadActive) {
-		static const char* info = "haxe thread already running";
-		return info;
-	}
-
-	if (staticsInitialized) {
-		static const char* info = "haxe thread cannot be restarted once stopped";
-		return info;
-	}
-
 	HaxeThreadData threadData = {
 		.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? defaultExceptionHandler : unhandledExceptionCallback,
 		.initExceptionInfo = nullptr,
 	};
 
-	// startup the haxe main thread
-	HxCreateDetachedThread(haxeMainThreadFunc, &threadData);
+	{
+		// mutex prevents two threads calling this function from being able to start two haxe threads
+		AutoLock lock(threadManageMutex);
+		if (!threadStarted) {
+			// startup the haxe main thread
+			HxCreateDetachedThread(haxeMainThreadFunc, &threadData);
 
-	// wait until the thread is initialized and ready
-	threadInitSemaphore.Wait();
+			threadStarted = true;
 
-	threadManageMutex.Unlock();
+			// wait until the thread is initialized and ready
+			threadInitSemaphore.Wait();
+		} else {
+			threadData.initExceptionInfo = "haxe thread cannot be started twice";
+		}
+	}
 				
 	if (threadData.initExceptionInfo != nullptr) {
 		HaxeLib_stopHaxeThread();
@@ -121,20 +116,23 @@ const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptio
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-void HaxeLib_stopHaxeThread() {
-	threadManageMutex.Lock();
-
-	if (!threadActive) return;
-
-	hx::NativeAttach autoAttach;
-
-	// queue an exception into the event loop so we break out of the loop and end the thread
-	HaxeEmbed::endMainThread();
-
-	// block until the thread ends, the haxe thread will first execute all immediately pending events
-	threadEndSemaphore.Wait();
-
-	threadManageMutex.Unlock();
+bool HaxeLib_stopHaxeThread() {
+	// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on threadEndSemaphore
+	// the idea here is only one stopHaxeThread can running at a time, if stop has already been called, subsequent stops will return immediately
+	bool stopped = false;
+	if (threadManageMutex.TryLock()) {
+		if (threadRunning) {
+			hx::NativeAttach autoAttach;
+			bool isMain = HaxeEmbed::isMainThread();
+			HaxeEmbed::endMainThread();
+			if (!isMain) {
+				threadEndSemaphore.Wait();
+			}
+		}
+		stopped = true;
+		threadManageMutex.Unlock();
+	}
+	return stopped;
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES

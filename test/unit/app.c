@@ -7,24 +7,31 @@
 #include "haxe-bin/MessagePayload.h"
 #include "haxe-bin/HaxeLib.h"
 
+#define log(fmt) printf("%s:%d: " fmt, __FILE__, __LINE__);
+#define logv(fmt, ...) printf("%s:%d: " fmt, __FILE__, __LINE__, __VA_ARGS__);
+
 // called from the haxe main thread
 // the thread will continue running
 void onHaxeException(const char* info) {
-	printf("app.c: Uncaught haxe exception: %s\n", info);
+	logv("Uncaught haxe exception (manually stopping haxe thread): %s\n", info);
+	HaxeLib_stopHaxeThread();
+	log("thread stopped\n");
 }
 
 // we pass this to our haxe program via setMessageSync to test calling into native code from haxe
 // it will be called on the haxe thread
 void nativeCallback(int number) {
-	printf("app.c: native callback %d\n", number);
+	logv("native callback %d\n", number);
 }
 
 int main(void) {
-	printf("app.c: Hello From C\n");
+	log("Hello From C\n");
+
+	HaxeLib_stopHaxeThread();
 	
 	const char* result = HaxeLib_initializeHaxeThread(onHaxeException);
 	if (result != NULL) {
-		printf("app.c: Failed to initialize haxe: %s\n", result);
+		logv("Failed to initialize haxe: %s\n", result);
 	}
 	assert(result == NULL);
 
@@ -39,22 +46,20 @@ int main(void) {
 	assert(i == 16);
 	assert(starI == r);
 
-	sleep(3);
 	HaxeLib_throwException();
-	sleep(3);
 
 	// end the haxe thread (this will block while the haxe thread finishes processing immediate pending events)
-	printf("app.c: Stopping haxe thread\n");
+	log("Stopping haxe thread\n");
 	HaxeLib_stopHaxeThread();
 
 	// trying to reinitialize haxe thread should fail
-	printf("app.c: Starting haxe thread\n");
+	log("Starting haxe thread\n");
 	result = HaxeLib_initializeHaxeThread(onHaxeException);
 	assert(result != NULL);
 	if (result != NULL) {
-		printf("app.c: Failed to initialize haxe: %s\n", result);
+		logv("Failed to initialize haxe: %s\n", result);
 	}
-	printf("app.c: Stopping haxe thread\n");
+	log("Stopping haxe thread\n");
 	HaxeLib_stopHaxeThread();
 
 	return 0;
