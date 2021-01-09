@@ -1,0 +1,11 @@
+.haxelib/
+
+app
+
+# ignore all execept the generate files
+haxe-bin/*
+!haxe-bin/HaxeLib.h
+
+!haxe-bin/src
+haxe-bin/src/*
+!haxe-bin/src/__HaxeLib__.cpp
