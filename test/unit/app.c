@@ -7,7 +7,8 @@
 #include "haxe-bin/MessagePayload.h"
 #include "haxe-bin/HaxeLib.h"
 
-// called from the haxe main thread before it terminates after an unhandled exception
+// called from the haxe main thread
+// the thread will continue running
 void onHaxeException(const char* info) {
 	printf("app.c: Uncaught haxe exception: %s\n", info);
 }
@@ -21,11 +22,11 @@ void nativeCallback(int number) {
 int main(void) {
 	printf("app.c: Hello From C\n");
 	
-	const char* result = HaxeLib_startHaxeThread(onHaxeException);
-
+	const char* result = HaxeLib_initializeHaxeThread(onHaxeException);
 	if (result != NULL) {
-		printf("Failed to initialize haxe: %s", result);
+		printf("app.c: Failed to initialize haxe: %s\n", result);
 	}
+	assert(result == NULL);
 
 	assert(HaxeLib_callInMainThread(123.4));
 	assert(HaxeLib_callInExternalThread(567.8));
@@ -39,8 +40,21 @@ int main(void) {
 	assert(starI == r);
 
 	sleep(3);
+	HaxeLib_throwException();
+	sleep(3);
 
 	// end the haxe thread (this will block while the haxe thread finishes processing immediate pending events)
+	printf("app.c: Stopping haxe thread\n");
+	HaxeLib_stopHaxeThread();
+
+	// trying to reinitialize haxe thread should fail
+	printf("app.c: Starting haxe thread\n");
+	result = HaxeLib_initializeHaxeThread(onHaxeException);
+	assert(result != NULL);
+	if (result != NULL) {
+		printf("app.c: Failed to initialize haxe: %s\n", result);
+	}
+	printf("app.c: Stopping haxe thread\n");
 	HaxeLib_stopHaxeThread();
 
 	return 0;

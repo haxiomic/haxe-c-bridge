@@ -41,46 +41,40 @@ extern "C" {
 	/**
 	 * Initializes a haxe thread that remains alive indefinitely and executes the user's haxe main()
 	 * 
-	 * This must be called before sending messages
+	 * This must be first before calling haxe functions
 	 * 
-	 * It may be called again if `HaxeLib_stopHaxeThread` is used to end the current haxe thread first (all state from the previous execution will be lost)
-	 * 
-	 * Thread-safe
-	 * 
-	 * @param fatalExceptionCallback a callback to execute if a fatal unhandled exception occurs on the haxe thread. This will be executed on the haxe thread immediately before it ends. You may use this callback to start a new haxe thread. Use `NULL` for no callback
-	 * @returns `NULL` if the thread initializes successfully or a null terminated C string with exception if an exception occurs during initialization
+	 * @param unhandledExceptionCallback a callback to execute if an unhandled exception occurs on the haxe thread. The haxe thread will continue processing events after an unhandled exception. Use `NULL` for no callback
+	 * @returns `NULL` if the thread initializes successfully or a null terminated C string if an error occurs during initialization
 	 */
-	const char* HaxeLib_startHaxeThread(HaxeExceptionCallback fatalExceptionCallback);
+	const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
 
 	/**
-	 * Ends the haxe thread after it finishes processing pending events (events scheduled in the future will not be executed)
+	 * Ends the haxe thread after it finishes processing pending events (events scheduled in the future will not be executed). Once ended, it cannot be restarted
 	 * 
 	 * Blocks until the haxe thread has finished
 	 * 
-	 * `HaxeLib_startHaxeThread` may be used to reinitialize the thread. Haxe main() will be called for a second time and all state from the previous execution will be lost
-	 * 
-	 * Thread-safety: May be called on a different thread to `HaxeLib_startHaxeThread` but must not be called from the haxe thread
+	 * Thread-safety: May be called on a different thread to `HaxeLib_startHaxeThread`
 	 */
 	void HaxeLib_stopHaxeThread();
 
 	/**
-	 * $l
-	 * $l
-	 * $l
-	 * $l
+	 * Some doc
+	 * @param a some integer
+	 * @param b some string
+	 * @returns void
 	 */
 	void HaxeLib_voidRtn(int a, const char* b);
 
 	void HaxeLib_noArgsNoReturn();
 
 	/**
-	 * $l
+	 * when called externally from C this function will be executed synchronously on the main thread
 	 */
 	bool HaxeLib_callInMainThread(double f64);
 
 	/**
-	 * $l
-	 * $l
+	 * When called externally from C this function will be executed on the calling thread.
+	 * Beware: you cannot interact with the rest of your code without first synchronizing with the main thread (or risk crashes)
 	 */
 	bool HaxeLib_callInExternalThread(double f64);
 
@@ -105,9 +99,11 @@ extern "C" {
 	void HaxeLib_cppCoreTypes(size_t sizet, char char_, const char* constCharStar);
 
 	/**
-	 * $l
+	 * single-line doc
 	 */
 	int HaxeLib_somePublicMethod(int i, double f, float s, signed char i8, short i16, int i32, int64_t i64, uint64_t ui64, const char* str);
+
+	void HaxeLib_throwException();
 
 	const char* HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate();
 

@@ -18,19 +18,23 @@ import cpp.Star;
 ')
 class Main {
 
+	static var s: Int;
+
 	static function main() {
+		trace('main()');
 		pack.ExampleClass;
 
 		var i = 0;
 		function loop() {
-			trace('loop ${i++}');
-			haxe.Timer.delay(loop, 500);
+			trace('loop ${i++} ${s++}');
+			haxe.Timer.delay(loop, 1000);
 		}
 		loop();
 	}
 
 }
 
+typedef CustomStarX = haxe.Timer;
 typedef CustomStar<T> = cpp.Star<T>;
 typedef CppVoidX = AliasA;
 typedef AliasA = cpp.Void;
@@ -73,7 +77,7 @@ class PublicCApi {
 	**/
 	static public function voidRtn(a: Int, b: String): Void {}
 
-	static public function noArgsNoReturn(): Void {}
+	static public function noArgsNoReturn(): Void { }
 
 	/** when called externally from C this function will be executed synchronously on the main thread **/
 	static public function callInMainThread(f64: cpp.Float64): Bool {
@@ -141,6 +145,10 @@ class PublicCApi {
 	static public function somePublicMethod(i: Int, f: Float, s: Single, i8: cpp.Int8, i16: cpp.Int16, i32: cpp.Int32, i64: cpp.Int64, ui64: cpp.UInt64, str: String): Int {
 		trace('somePublicMethod()');
 		return -1;
+	}
+
+	static public function throwException(): Void {
+		throw 'example exception';
 	}
 
 	// the following should be disallowed at compile-time
