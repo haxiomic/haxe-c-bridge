@@ -10,11 +10,18 @@
 				"$haxe-error",
 				"$haxe-trace"
 			],
+			"group": "build",
+			"label": "haxe: active configuration"
+		},
+		{
+			"label": "Makefile.mac run",
+			"type": "shell",
+			"command": "make -f Makefile.mac run",
+			"problemMatcher": [],
 			"group": {
 				"kind": "build",
 				"isDefault": true
-			},
-			"label": "haxe: active configuration"
+			}
 		}
 	]
 }

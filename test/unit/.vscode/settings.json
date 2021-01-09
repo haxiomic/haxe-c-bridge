@@ -1,6 +1,7 @@
 {
-	"triggerTaskOnSave.selectedTask": "haxe: active configuration",
+	"triggerTaskOnSave.selectedTask": "Makefile.mac run",
 	"triggerTaskOnSave.tasks": {
-		"haxe: active configuration": ["*.hx"]
+		"haxe: active configuration": ["*.hx"],
+		"Makefile.mac run": ["*.c"],
 	}
 }
