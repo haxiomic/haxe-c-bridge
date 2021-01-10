@@ -405,19 +405,37 @@ class HaxeEmbed {
 		}
 		var d: CDeclaration = { kind: Function(signature) }
 
+		// cast a C type to one which works with hxcpp
+		inline function castC2Cpp(expr: String, rootCType: CType) {
+			// type cast argument before passing to hxcpp
+			return switch rootCType {
+				case Ident(name, _): expr; // basic C type, no cast needed
+				case Pointer(t, _):  '(${CPrinter.printType(rootCType)}) $expr'; // cast to root C type for better handling by hxcpp types
+				case FunctionPointer(name, argTypes, ret, _): 'hx::AnyCast(${expr})'; // functions can use AnyCast to force cast to cpp::Function
+				case InlineStruct(_): expr;
+			}
+		}
+
+		inline function castCpp2C(expr: String, cType: CType, rootCType: CType) {
+			return switch rootCType {
+				case Ident(name, _): expr;
+				case Pointer(t, _): expr;
+				case FunctionPointer(name, argTypes, ret, _): '(${CPrinter.printType(cType)}) $expr.call'; // functions can use AnyCast to force cast to cpp::Function
+				case InlineStruct(_): expr;
+			}
+		}
+
 		inline function callWithArgs(argNames: Array<String>) {
-			return '${haxeFunction.hxcppName}(${
+			var callExpr = '${haxeFunction.hxcppName}(${
 				argNames.mapi((i, arg) -> {
-					var rootCType = haxeFunction.rootCTypes.args[i];
-					// type cast argument before passing to hxcpp
-					switch rootCType {
-						case Ident(name, _): arg; // basic C type, no cast needed
-						case Pointer(t, _):  '(${CPrinter.printType(rootCType)}) $arg'; // cast to root C type for better handling by hxcpp types
-						case FunctionPointer(name, argTypes, ret, _): 'hx::AnyCast(${arg})'; // functions can use AnyCast to force cast to cpp::Function
-						case InlineStruct(_): arg;
-					}
+					castC2Cpp(arg, haxeFunction.rootCTypes.args[i]);
 				}).join(', ')
 			})';
+			return if (hasReturnValue) {
+				castCpp2C(callExpr, signature.ret, haxeFunction.rootCTypes.ret);
+			} else {
+				callExpr;
+			}
 		}
 
 		if (externalThread) {
@@ -476,7 +494,10 @@ class HaxeEmbed {
 							static void run(void* p) {
 								$fnDataTypeName* $fnDataName = ($fnDataTypeName*) p;
 								try {
-									${hasReturnValue ? '$fnDataName->ret = ' : ''}${callWithArgs(signature.args.map(a->'$fnDataName->args.${a.name}'))};
+									${hasReturnValue ?
+										'$fnDataName->ret = ${callWithArgs(signature.args.map(a->'$fnDataName->args.${a.name}'))};' :
+										'${callWithArgs(signature.args.map(a->'$fnDataName->args.${a.name}'))};'
+									}
 									$fnDataName->lock.Set();
 								} catch(Dynamic runtimeException) {
 									$fnDataName->lock.Set();
