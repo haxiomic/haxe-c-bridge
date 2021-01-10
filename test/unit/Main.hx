@@ -113,28 +113,47 @@ class PublicCApi {
 		rawPointer: cpp.RawPointer<cpp.Void>,
 		rawInt64Pointer: cpp.RawPointer<cpp.Int64>,
 		rawConstPointer: cpp.RawConstPointer<cpp.Void>
-	): Void { }
+	): cpp.RawPointer<cpp.Void> {
+		return rawPointer;
+	}
 
 	static public function hxcppPointers(
+		assert: Callable<Bool -> Void>,
 		pointer: cpp.Pointer<cpp.Void>,
-		int64Pointer: cpp.Pointer<cpp.Int64>,
+		int64Array: cpp.Pointer<cpp.Int64>,
+		int64ArrayLength: Int,
 		constPointer: cpp.ConstPointer<cpp.Void>
-	): Void { }
+	): cpp.Pointer<cpp.Int64> {
+		var array = int64Array.toUnmanagedArray(int64ArrayLength);
+		assert(array.join(',') == '1,2,3');
+		return int64Array;
+	}
 
 	static public function hxcppCallbacks(
+		assert: Callable<Bool -> Void>,
 		voidVoid: Callable<() -> Void>,
 		voidInt: Callable<() -> Int>,
 		intString: Callable<(a: Int) -> String>,
 		stringInt: Callable<(String) -> Int>,
-		intVoid: Callable<(Int) -> Void>,
 		pointers: Callable<(Pointer<Int>) -> Pointer<Int>>,
 		fnAlias: Callable<FunctionAlias>
-	): Callable<() -> Void> {
-		return voidVoid;
+	): Callable<(a: Int) -> String> {
+		var hi = intString(42);
+		assert(hi == "hi");
+		var i = 42;
+		var ip = Pointer.fromStar(Native.addressOf(i));
+		var result = pointers(ip);
+		assert(result == ip);
+		assert(i == 21);
+		return intString;
 	}
 
-	static public function externStruct(v: MessagePayload): MessagePayload return v;
+	static public function externStruct(v: MessagePayload): MessagePayload {
+		v.someFloat *= 2;
+		return v;
+	}
 
+	// optional not supported; all args are required when calling from C
 	static public function optional(?single: Single): Void { }
 	static public function badOptional(?opt: Single, notOpt: Single): Void { }
 

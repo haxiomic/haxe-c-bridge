@@ -13,11 +13,11 @@
 
 typedef void HaxeLib_AliasA;
 typedef HaxeLib_AliasA HaxeLib_CppVoidX;
+typedef void (* function_Bool_Void) (bool);
 typedef void (* function_Void) (void);
 typedef int (* function_Int) (void);
 typedef const char* (* function_Int_String) (int);
 typedef int (* function_String_Int) (const char*);
-typedef void (* function_Int_Void) (int);
 typedef int* (* function_cpp_Pointer_Int__cpp_Pointer_Int_) (int*);
 typedef const char* (* function_CustomStar_Int__String) (int*);
 typedef function_CustomStar_Int__String HaxeLib_FunctionAlias;
@@ -54,7 +54,7 @@ extern "C" {
 	 * If the haxe thread is active it will blocks until the haxe thread has finished (unless executed on the haxe main thread)
 	 * 
 	 * Thread-safety: May be called on a different thread to `HaxeLib_startHaxeThread`
-	 * @returns `true` if thread was stopped synchronously or `false` otherwise – this might be because the haxe thread was not running or another thread has already called `stopHaxeThread() `
+	 * @returns `true` if thread was stopped synchronously or `false` otherwise – this might be because the haxe thread was not running or another thread has already called `stopHaxeThread()`
 	 */
 	bool HaxeLib_stopHaxeThread();
 
@@ -83,11 +83,11 @@ extern "C" {
 
 	int* HaxeLib_starPointers(void* starVoid, HaxeLib_CppVoidX* starVoid2, HaxeLib_CppVoidX* customStar, int** customStar2, const void* constStarVoid, int* starInt, const char* constCharStar);
 
-	void HaxeLib_rawPointers(void* rawPointer, int64_t* rawInt64Pointer, const void* rawConstPointer);
+	void* HaxeLib_rawPointers(void* rawPointer, int64_t* rawInt64Pointer, const void* rawConstPointer);
 
-	void HaxeLib_hxcppPointers(void* pointer, int64_t* int64Pointer, const void* constPointer);
+	int64_t* HaxeLib_hxcppPointers(function_Bool_Void assert, void* pointer, int64_t* int64Array, int int64ArrayLength, const void* constPointer);
 
-	function_Void HaxeLib_hxcppCallbacks(function_Void voidVoid, function_Int voidInt, function_Int_String intString, function_String_Int stringInt, function_Int_Void intVoid, function_cpp_Pointer_Int__cpp_Pointer_Int_ pointers, HaxeLib_FunctionAlias fnAlias);
+	function_Int_String HaxeLib_hxcppCallbacks(function_Bool_Void assert, function_Void voidVoid, function_Int voidInt, function_Int_String intString, function_String_Int stringInt, function_cpp_Pointer_Int__cpp_Pointer_Int_ pointers, HaxeLib_FunctionAlias fnAlias);
 
 	MessagePayload HaxeLib_externStruct(MessagePayload v);
 
