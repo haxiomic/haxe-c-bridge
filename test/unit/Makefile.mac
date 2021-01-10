@@ -3,7 +3,7 @@ HAXE_BIN=haxe-bin
 HAXE_LIB=Main-debug.dylib
 
 CC=clang
-CFLAGS=-Wall -pedantic -std=c99 $(HAXE_BIN)/$(HAXE_LIB)
+CFLAGS=-Wall -g -pedantic -std=c99 $(HAXE_BIN)/$(HAXE_LIB)
 
 all: $(HAXE_BIN)/$(HAXE_LIB) $(EXE)
 # tell $(EXE) where the dynamic library is located
