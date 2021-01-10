@@ -129,9 +129,10 @@ class HaxeEmbed {
 				cConversionContext.addFunctionDeclaration(cFuncName, fun.args, fun.ret, cleanDoc, f.pos);
 
 				inline function getRootCType(ct: ComplexType) {
-					var tmpCtx = new CConverterContext({generateTypedef: false, generateTypedefForFunctions: false, generateEnums: false});
+					var tmpCtx = new CConverterContext({generateTypedef: false, generateTypedefForFunctions: false, generateEnums: true});
 					return tmpCtx.convertType(
 						Context.resolveType(ct, f.pos),
+						true,
 						true,
 						f.pos
 					);
@@ -409,19 +410,16 @@ class HaxeEmbed {
 		inline function castC2Cpp(expr: String, rootCType: CType) {
 			// type cast argument before passing to hxcpp
 			return switch rootCType {
-				case Ident(name, _): expr; // basic C type, no cast needed
-				case Pointer(t, _):  '(${CPrinter.printType(rootCType)}) $expr'; // cast to root C type for better handling by hxcpp types
-				case FunctionPointer(name, argTypes, ret, _): 'hx::AnyCast(${expr})'; // functions can use AnyCast to force cast to cpp::Function
-				case InlineStruct(_): expr;
+				case Enum(_): expr; // enum to int works with implicit cast
+				case Ident(_), FunctionPointer(_), InlineStruct(_), Pointer(_): expr; // hxcpp auto casting works
 			}
 		}
 
 		inline function castCpp2C(expr: String, cType: CType, rootCType: CType) {
+			// cast hxcpp type to c
 			return switch rootCType {
-				case Ident(name, _): expr;
-				case Pointer(t, _): expr;
-				case FunctionPointer(name, argTypes, ret, _): '(${CPrinter.printType(cType)}) $expr.call'; // functions can use AnyCast to force cast to cpp::Function
-				case InlineStruct(_): expr;
+				case Enum(_): 'static_cast<${CPrinter.printType(cType)}>($expr)'; // need explicit cast for int -> enum
+				case Ident(_), FunctionPointer(_), InlineStruct(_), Pointer(_): expr; // hxcpp auto casting works
 			}
 		}
 
@@ -585,6 +583,7 @@ enum CType {
 	Pointer(t: CType, ?modifiers: Array<CModifier>);
 	FunctionPointer(name: String, argTypes: Array<CType>, ret: CType, ?modifiers: Array<CModifier>);
 	InlineStruct(struct: CStruct);
+	Enum(name: String);
 }
 
 // not exactly specification C but good enough for this purpose
@@ -647,7 +646,8 @@ class CPrinter {
 				'${printType(ret)} (* $name) (${argTypes.length > 0 ? argTypes.map(printType).join(', ') : 'void'})';
 			case InlineStruct(struct):
 				'struct {${printFields(struct.fields, false)}}';
-
+			case Enum(name):
+				'enum $name';
 		}
 	}
 
@@ -749,18 +749,18 @@ class CConverterContext {
 				name: name,
 				args: args.map(arg -> {
 					name: cKeywords.has(arg.name) ? (arg.name + '_') : arg.name,
-					type: convertComplexType(arg.type, pos)
+					type: convertComplexType(arg.type, true, pos)
 				}),
-				ret: convertComplexType(ret, pos)
+				ret: convertComplexType(ret, true, pos)
 			})
 		});
 	}
 
-	public function convertComplexType(ct: ComplexType, pos: Position) {
-		return convertType(Context.resolveType(ct, pos), false, pos);
+	public function convertComplexType(ct: ComplexType, allowNonTrivial: Bool, pos: Position) {
+		return convertType(Context.resolveType(ct, pos), allowNonTrivial, false, pos);
 	}
 
-	public function convertType(type: Type, allowBareFnTypes: Bool, pos: Position): CType {
+	public function convertType(type: Type, allowNonTrivial: Bool, allowBareFnTypes: Bool, pos: Position): CType {
 		var hasCoreTypeIndication = {
 			var baseType = asBaseType(type);
 			if (baseType != null) {
@@ -775,12 +775,12 @@ class CConverterContext {
 		}
 
 		if (hasCoreTypeIndication) {
-			return convertKeyType(type, allowBareFnTypes, pos);
+			return convertKeyType(type, allowNonTrivial, allowBareFnTypes, pos);
 		}
 		
 		return switch type {
 			case TInst(_.get() => t, _):
-				var keyCType = tryConvertKeyType(type, allowBareFnTypes, pos);
+				var keyCType = tryConvertKeyType(type, allowNonTrivial, allowBareFnTypes, pos);
 				if (keyCType != null) {
 					keyCType;
 				} else if (t.isExtern) {
@@ -832,7 +832,7 @@ class CConverterContext {
 				Context.error("Haxe structures are not supported when exposing to C, try using an extern for a C struct instead", pos);
 
 			case TAbstract(_.get() => t, _):
-				var keyCType = tryConvertKeyType(type, allowBareFnTypes, pos);
+				var keyCType = tryConvertKeyType(type, allowNonTrivial, allowBareFnTypes, pos);
 				if (keyCType != null) {
 					keyCType;
 				} else {
@@ -843,15 +843,15 @@ class CConverterContext {
 					} else false;
 					if (isIntEnumAbstract && generateEnums) {
 						// c-enums can be converted to ints
-						getEnumCType(type, pos);
+						getEnumCType(type, allowNonTrivial, pos);
 					} else {
 						// follow once abstract's underling type
-						convertType(TypeTools.followWithAbstracts(type, true), allowBareFnTypes, pos);
+						convertType(TypeTools.followWithAbstracts(type, true), allowNonTrivial, allowBareFnTypes, pos);
 					}
 				}
 			
 			case TType(_.get() => t, params):
-				var keyCType = tryConvertKeyType(type, allowBareFnTypes, pos);
+				var keyCType = tryConvertKeyType(type, allowNonTrivial, allowBareFnTypes, pos);
 				if (keyCType != null) {
 					keyCType;
 				} else {
@@ -862,15 +862,15 @@ class CConverterContext {
 						!t.isPrivate;
 
 					if (useDeclaration) {
-						getTypeAliasCType(type, allowBareFnTypes, pos);
+						getTypeAliasCType(type, allowNonTrivial, allowBareFnTypes, pos);
 					} else {
 						// follow type alias (with type parameter)
-						convertType(TypeTools.follow(type, true), allowBareFnTypes, pos);
+						convertType(TypeTools.follow(type, true), allowNonTrivial, allowBareFnTypes, pos);
 					}
 				}
 
 			case TLazy(f):
-				convertType(f(), allowBareFnTypes, pos);
+				convertType(f(), allowNonTrivial, allowBareFnTypes, pos);
 
 			case TDynamic(t):
 				Context.error("Dynamic is not supported when exposing to C", pos);
@@ -887,8 +887,8 @@ class CConverterContext {
 		Convert a key type and expect a result (or fail)
 		A key try is like a core type (and includes :coreType types) but also includes hxcpp's own special types that don't have the :coreType annotation
 	**/
-	function convertKeyType(type: Type, allowBareFnTypes: Bool, pos: Position): CType {
-		var keyCType = tryConvertKeyType(type, allowBareFnTypes, pos);
+	function convertKeyType(type: Type, allowNonTrivial:Bool, allowBareFnTypes: Bool, pos: Position): CType {
+		var keyCType = tryConvertKeyType(type, allowNonTrivial, allowBareFnTypes, pos);
 		return if (keyCType == null) {
 			var p = new Printer();
 			Context.warning('No corresponding C type found for "${TypeTools.toString(type)}" (using void* instead)', pos);
@@ -899,13 +899,13 @@ class CConverterContext {
 	/**
 		Return CType if Type was a key type and null otherwise
 	**/
-	function tryConvertKeyType(type: Type, allowBareFnTypes: Bool, pos: Position): Null<CType> {
+	function tryConvertKeyType(type: Type, allowNonTrivial:Bool, allowBareFnTypes: Bool, pos: Position): Null<CType> {
 		var base = asBaseType(type);
 		return if (base != null) {
 			switch base {
 				// special cases where we have to patch out the hxcpp types because they don't work with Context.resolveType
 				case {t: {pack: [], name: 'CppVoid' }}: Ident('void');
-				case {t: {pack: [], name: 'CppConstPointer' }, params: [tp]}: Pointer(setModifier(convertType(tp, allowBareFnTypes, pos), Const));
+				case {t: {pack: [], name: 'CppConstPointer' }, params: [tp]}: Pointer(setModifier(convertType(tp, false, allowBareFnTypes, pos), Const));
 
 				/**
 					See `cpp_type_of` in gencpp.ml
@@ -923,9 +923,6 @@ class CConverterContext {
 				case {t: {pack: [], name: "Int"}}: Ident("int");
 				case {t: {pack: [], name: "Single"}}: Ident("float");
 
-				// needs explicit conversion internally
-				case {t: {pack: [], name: "String"}}: Pointer(Ident("char", [Const]));
-
 				case {t: {pack: ["cpp"], name: "Void"}}: Ident('void');
 				case {t: {pack: ["cpp"], name: "SizeT"}}: requireHeader('stddef.h'); Ident("size_t");
 				case {t: {pack: ["cpp"], name: "Char"}}: Ident("char");
@@ -940,11 +937,42 @@ class CConverterContext {
 				case {t: {pack: ["cpp"], name: "UInt32"}}: Ident("unsigned int");
 				case {t: {pack: ["cpp"], name: "UInt64"}}: requireHeader('stdint.h'); Ident("uint64_t");
 
-				case {t: {pack: ["cpp"], name: "Star" | "RawPointer" | "Pointer"}, params: [tp]}: Pointer(convertType(tp, allowBareFnTypes, pos));
-				case {t: {pack: ["cpp"], name: "ConstStar" | "RawConstPointer" | "ConstPointer"}, params: [tp]}: Pointer(setModifier(convertType(tp, allowBareFnTypes, pos), Const));
+				case {t: {pack: ["cpp"], name: "Star" | "RawPointer"}, params: [tp]}: Pointer(convertType(tp, false, allowBareFnTypes, pos));
+				case {t: {pack: ["cpp"], name: "ConstStar" | "RawConstPointer" }, params: [tp]}: Pointer(setModifier(convertType(tp, false, allowBareFnTypes, pos), Const));
 
-				case {t: {pack: ["cpp"], name: "Callable" | "CallableData"}, params: [tp]}: convertType(tp, true, pos);
-				case {t: {pack: ["cpp"], name: "Function"}, params: [tp, abi]}: convertType(tp, true, pos);
+				// non-trivial types
+				// hxcpp will convert these automatically if primary type but not if secondary (like as argument type or pointer type)
+				case {t: {pack: [], name: "String"}}:
+					if (allowNonTrivial) {
+						Pointer(Ident("char", [Const]));
+					} else {
+						Context.error('String is not supported as secondary type for C export, use cpp.ConstCharStar instead', pos);
+					}
+
+				case {t: {pack: ["cpp"], name: "Pointer"}, params: [tp]}:
+					if (allowNonTrivial) {
+						Pointer(convertType(tp, false, allowBareFnTypes, pos));
+					} else {
+						Context.error('cpp.Pointer is not supported as secondary type for C export, use cpp.Star or cpp.RawPointer instead', pos);
+					}
+				case {t: {pack: ["cpp"], name: "ConstPointer" }, params: [tp]}:
+					if (allowNonTrivial) {
+						Pointer(setModifier(convertType(tp, false, allowBareFnTypes, pos), Const));
+					} else {
+						Context.error('cpp.ConstPointer is not supported as secondary type for C export, use cpp.ConstStar or cpp.RawRawPointer instead', pos);
+					}
+				case {t: {pack: ["cpp"], name: "Callable" | "CallableData"}, params: [tp]}:
+					if (allowNonTrivial) {
+						convertType(tp, false, true, pos);
+					} else {
+						Context.error('${base.t.pack.concat([base.t.name]).join('.')} is not supported as secondary type for C export', pos);
+					}
+				case {t: {pack: ["cpp"], name: "Function"}, params: [tp, abi]}:
+					if (allowNonTrivial) {
+						convertType(tp, false, true, pos);
+					} else {
+						Context.error('${base.t.pack.concat([base.t.name]).join('.')} is not supported as secondary type for C export', pos);
+					}
 
 				case {t: {pack: ["cpp"], name: name =
 					"Reference" |
@@ -1000,6 +1028,7 @@ class CConverterContext {
 			case Pointer(type, modifiers): Pointer(type, _setModifier(modifiers));
 			case FunctionPointer(name, argTypes, ret, modifiers): FunctionPointer(name, argTypes, ret, _setModifier(modifiers));
 			case InlineStruct(struct): cType;
+			case Enum(name): cType; 
 		}
 	}
 
@@ -1012,8 +1041,13 @@ class CConverterContext {
 		}
 	}
 
-	function getEnumCType(type: Type, pos: Position): CType {
+	function getEnumCType(type: Type, allowNonTrivial: Bool, pos: Position): CType {
 		var ident = declarationPrefix + '_' + typeDeclarationIdent(type);
+
+		// `enum ident` is considered non-trivial
+		if (!allowNonTrivial) {
+			Context.error('Enums are not allowed as secondary types, consider using Int instead', pos);
+		}
 
 		if (!declaredTypeIdentifiers.exists(ident)) {
 			
@@ -1033,15 +1067,20 @@ class CConverterContext {
 			declaredTypeIdentifiers.set(ident, true);
 			
 		}
-		return Ident('enum $ident');
+		return Enum(ident);
 	}
 
-	function getTypeAliasCType(type: Type, allowBareFnTypes: Bool, pos: Position): CType {
+	function getTypeAliasCType(type: Type, allowNonTrivial: Bool, allowBareFnTypes: Bool, pos: Position): CType {
 		var ident = declarationPrefix + '_' + typeDeclarationIdent(type);
+
+		// order of typedef typeDeclarations should be dependency correct because required typedefs are added before this typedef is added
+		// we call this outside the exists() branch below to make sure `allowNonTrivial` and `allowBareFnTypes` errors will be caught
+		// otherwise the following may allow a non-trivial type as a secondary:
+		// func(a: NonTrivialAlias, b: Star<NonTrivialAlias>) because `NonTrivialAlias` is first created when converting `a` and then referenced without checks for `b`
+		var aliasedType = convertType(TypeTools.follow(type, true), allowNonTrivial, allowBareFnTypes, pos);
+
 		if (!declaredTypeIdentifiers.exists(ident)) {
 			
-			// order of typedef typeDeclarations should be dependency correct because required typedefs are added before this typedef is added
-			var aliasedType = convertType(TypeTools.follow(type, true), allowBareFnTypes, pos);
 			typeDeclarations.push({kind: Typedef(aliasedType, [ident])});
 			declaredTypeIdentifiers.set(ident, true);
 			
@@ -1055,8 +1094,8 @@ class CConverterContext {
 		var ident = 'function_' + args.map(arg -> typeDeclarationIdent(arg.t)).concat([typeDeclarationIdent(ret)]).join('_');
 		var funcPointer: CType = FunctionPointer(
 			ident,
-			args.map(arg -> convertType(arg.t, false, pos)),
-			convertType(ret, false, pos)
+			args.map(arg -> convertType(arg.t, false, false, pos)),
+			convertType(ret, false, false, pos)
 		);
 
 		if (generateTypedefForFunctions) {
