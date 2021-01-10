@@ -32,7 +32,6 @@ void assertCallback(bool v) {
 void fnVoid() {}
 int fnInt() {return 42;}
 const char* fnIntString(int i) {
-	logf("%d\n", i);
 	assert(i == 42);
 	static const char* str = "hi";
 	return str;
@@ -76,12 +75,11 @@ int main(void) {
 	int64_t i64Array[3] = {1, 2, 3};
 	assert(HaxeLib_hxcppPointers(assertCallback, (void*)&i64, i64Array, sizeof(i64Array)/sizeof(i64Array[0]), "hallo-world") == i64Array);
 
-	function_Int_String ret = HaxeLib_hxcppCallbacks(
+	function_Int_cpp_ConstCharStar ret = HaxeLib_hxcppCallbacks(
 		assertCallback,
 		fnVoid,
 		fnInt,
 		fnIntString,
-		fnStringInt,
 		fnPointers,
 		fnIntStarStr
 	);

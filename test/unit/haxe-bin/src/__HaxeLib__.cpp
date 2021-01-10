@@ -136,15 +136,15 @@ bool HaxeLib_stopHaxeThread() {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-void HaxeLib_voidRtn(int a0, const char* a1) {
+void HaxeLib_voidRtn(int a0, const char* a1, HaxeLib_NonTrivialAlias a2, HaxeLib_EnumAlias a3) {
 	hx::NativeAttach autoAttach;
 	if (HaxeEmbed::isMainThread()) {
-		return test::HxPublicApi_obj::voidRtn(a0, (const char*) a1);
+		return test::HxPublicApi_obj::voidRtn(a0, a1, a2, a3);
 	}
 
 	// queue a callback to execute voidRtn() on the main thread and wait until execution completes
 	struct Data {
-		struct {int a0; const char* a1;} args;
+		struct {int a0; const char* a1; HaxeLib_NonTrivialAlias a2; HaxeLib_EnumAlias a3;} args;
 		HxSemaphore lock;
 	};
 
@@ -152,7 +152,7 @@ void HaxeLib_voidRtn(int a0, const char* a1) {
 		static void run(void* p) {
 			Data* data = (Data*) p;
 			try {
-				test::HxPublicApi_obj::voidRtn(data->args.a0, (const char*) data->args.a1);
+				test::HxPublicApi_obj::voidRtn(data->args.a0, data->args.a1, data->args.a2, data->args.a3);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -161,7 +161,7 @@ void HaxeLib_voidRtn(int a0, const char* a1) {
 		}
 	};
 
-	Data data = { {a0, a1} };
+	Data data = { {a0, a1, a2, a3} };
 	HaxeEmbed::queueOnMainThread(Callback::run, &data);
 	data.lock.Wait();
 }
@@ -273,7 +273,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES
 int* HaxeLib_starPointers(void* a0, HaxeLib_CppVoidX* a1, HaxeLib_CppVoidX* a2, int** a3, const void* a4, int* a5, const char* a6) {
 	hx::NativeAttach autoAttach;
 	if (HaxeEmbed::isMainThread()) {
-		return test::HxPublicApi_obj::starPointers((void*) a0, (void*) a1, (void*) a2, (int**) a3, (const void*) a4, (int*) a5, (const char*) a6);
+		return test::HxPublicApi_obj::starPointers(a0, a1, a2, a3, a4, a5, a6);
 	}
 
 	// queue a callback to execute starPointers() on the main thread and wait until execution completes
@@ -287,7 +287,7 @@ int* HaxeLib_starPointers(void* a0, HaxeLib_CppVoidX* a1, HaxeLib_CppVoidX* a2, 
 		static void run(void* p) {
 			Data* data = (Data*) p;
 			try {
-				data->ret = test::HxPublicApi_obj::starPointers((void*) data->args.a0, (void*) data->args.a1, (void*) data->args.a2, (int**) data->args.a3, (const void*) data->args.a4, (int*) data->args.a5, (const char*) data->args.a6);
+				data->ret = test::HxPublicApi_obj::starPointers(data->args.a0, data->args.a1, data->args.a2, data->args.a3, data->args.a4, data->args.a5, data->args.a6);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -306,7 +306,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES
 void* HaxeLib_rawPointers(void* a0, int64_t* a1, const void* a2) {
 	hx::NativeAttach autoAttach;
 	if (HaxeEmbed::isMainThread()) {
-		return test::HxPublicApi_obj::rawPointers((void*) a0, (int64_t*) a1, (const void*) a2);
+		return test::HxPublicApi_obj::rawPointers(a0, a1, a2);
 	}
 
 	// queue a callback to execute rawPointers() on the main thread and wait until execution completes
@@ -320,7 +320,7 @@ void* HaxeLib_rawPointers(void* a0, int64_t* a1, const void* a2) {
 		static void run(void* p) {
 			Data* data = (Data*) p;
 			try {
-				data->ret = test::HxPublicApi_obj::rawPointers((void*) data->args.a0, (int64_t*) data->args.a1, (const void*) data->args.a2);
+				data->ret = test::HxPublicApi_obj::rawPointers(data->args.a0, data->args.a1, data->args.a2);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -339,7 +339,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES
 int64_t* HaxeLib_hxcppPointers(function_Bool_Void a0, void* a1, int64_t* a2, int a3, const void* a4) {
 	hx::NativeAttach autoAttach;
 	if (HaxeEmbed::isMainThread()) {
-		return test::HxPublicApi_obj::hxcppPointers(hx::AnyCast(a0), (void*) a1, (int64_t*) a2, a3, (const void*) a4);
+		return test::HxPublicApi_obj::hxcppPointers(a0, a1, a2, a3, a4);
 	}
 
 	// queue a callback to execute hxcppPointers() on the main thread and wait until execution completes
@@ -353,7 +353,7 @@ int64_t* HaxeLib_hxcppPointers(function_Bool_Void a0, void* a1, int64_t* a2, int
 		static void run(void* p) {
 			Data* data = (Data*) p;
 			try {
-				data->ret = test::HxPublicApi_obj::hxcppPointers(hx::AnyCast(data->args.a0), (void*) data->args.a1, (int64_t*) data->args.a2, data->args.a3, (const void*) data->args.a4);
+				data->ret = test::HxPublicApi_obj::hxcppPointers(data->args.a0, data->args.a1, data->args.a2, data->args.a3, data->args.a4);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -369,24 +369,24 @@ int64_t* HaxeLib_hxcppPointers(function_Bool_Void a0, void* a1, int64_t* a2, int
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-function_Int_String HaxeLib_hxcppCallbacks(function_Bool_Void a0, function_Void a1, function_Int a2, function_Int_String a3, function_String_Int a4, function_cpp_Pointer_Int__cpp_Pointer_Int_ a5, HaxeLib_FunctionAlias a6) {
+function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void a0, function_Void a1, function_Int a2, function_Int_cpp_ConstCharStar a3, function_cpp_Star_Int__cpp_Star_Int_ a4, HaxeLib_FunctionAlias a5) {
 	hx::NativeAttach autoAttach;
 	if (HaxeEmbed::isMainThread()) {
-		return (function_Int_String) test::HxPublicApi_obj::hxcppCallbacks(hx::AnyCast(a0), hx::AnyCast(a1), hx::AnyCast(a2), hx::AnyCast(a3), hx::AnyCast(a4), hx::AnyCast(a5), hx::AnyCast(a6)).call;
+		return test::HxPublicApi_obj::hxcppCallbacks(a0, a1, a2, a3, a4, a5);
 	}
 
 	// queue a callback to execute hxcppCallbacks() on the main thread and wait until execution completes
 	struct Data {
-		struct {function_Bool_Void a0; function_Void a1; function_Int a2; function_Int_String a3; function_String_Int a4; function_cpp_Pointer_Int__cpp_Pointer_Int_ a5; HaxeLib_FunctionAlias a6;} args;
+		struct {function_Bool_Void a0; function_Void a1; function_Int a2; function_Int_cpp_ConstCharStar a3; function_cpp_Star_Int__cpp_Star_Int_ a4; HaxeLib_FunctionAlias a5;} args;
 		HxSemaphore lock;
-		function_Int_String ret;
+		function_Int_cpp_ConstCharStar ret;
 	};
 
 	struct Callback {
 		static void run(void* p) {
 			Data* data = (Data*) p;
 			try {
-				data->ret = (function_Int_String) test::HxPublicApi_obj::hxcppCallbacks(hx::AnyCast(data->args.a0), hx::AnyCast(data->args.a1), hx::AnyCast(data->args.a2), hx::AnyCast(data->args.a3), hx::AnyCast(data->args.a4), hx::AnyCast(data->args.a5), hx::AnyCast(data->args.a6)).call;
+				data->ret = test::HxPublicApi_obj::hxcppCallbacks(data->args.a0, data->args.a1, data->args.a2, data->args.a3, data->args.a4, data->args.a5);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -395,7 +395,7 @@ function_Int_String HaxeLib_hxcppCallbacks(function_Bool_Void a0, function_Void 
 		}
 	};
 
-	Data data = { {a0, a1, a2, a3, a4, a5, a6} };
+	Data data = { {a0, a1, a2, a3, a4, a5} };
 	HaxeEmbed::queueOnMainThread(Callback::run, &data);
 	data.lock.Wait();
 	return data.ret;
@@ -497,23 +497,24 @@ void HaxeLib_badOptional(float a0, float a1) {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-void HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract a0, const char* a1, HaxeLib_EnumAlias a2, enum HaxeLib_IndirectlyReferencedEnum* a3, enum HaxeLib_IndirectlyReferencedEnum** a4) {
+enum HaxeLib_IntEnum2 HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract a0, const char* a1, HaxeLib_EnumAlias a2) {
 	hx::NativeAttach autoAttach;
 	if (HaxeEmbed::isMainThread()) {
-		return test::HxPublicApi_obj::enumTypes(a0, (const char*) a1, a2, (int*) a3, (int**) a4);
+		return static_cast<enum HaxeLib_IntEnum2>(test::HxPublicApi_obj::enumTypes(a0, a1, a2));
 	}
 
 	// queue a callback to execute enumTypes() on the main thread and wait until execution completes
 	struct Data {
-		struct {enum HaxeLib_IntEnumAbstract a0; const char* a1; HaxeLib_EnumAlias a2; enum HaxeLib_IndirectlyReferencedEnum* a3; enum HaxeLib_IndirectlyReferencedEnum** a4;} args;
+		struct {enum HaxeLib_IntEnumAbstract a0; const char* a1; HaxeLib_EnumAlias a2;} args;
 		HxSemaphore lock;
+		enum HaxeLib_IntEnum2 ret;
 	};
 
 	struct Callback {
 		static void run(void* p) {
 			Data* data = (Data*) p;
 			try {
-				test::HxPublicApi_obj::enumTypes(data->args.a0, (const char*) data->args.a1, data->args.a2, (int*) data->args.a3, (int**) data->args.a4);
+				data->ret = static_cast<enum HaxeLib_IntEnum2>(test::HxPublicApi_obj::enumTypes(data->args.a0, data->args.a1, data->args.a2));
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -522,16 +523,17 @@ void HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract a0, const char* a1, HaxeLib_
 		}
 	};
 
-	Data data = { {a0, a1, a2, a3, a4} };
+	Data data = { {a0, a1, a2} };
 	HaxeEmbed::queueOnMainThread(Callback::run, &data);
 	data.lock.Wait();
+	return data.ret;
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
 void HaxeLib_cppCoreTypes(size_t a0, char a1, const char* a2) {
 	hx::NativeAttach autoAttach;
 	if (HaxeEmbed::isMainThread()) {
-		return test::HxPublicApi_obj::cppCoreTypes(a0, a1, (const char*) a2);
+		return test::HxPublicApi_obj::cppCoreTypes(a0, a1, a2);
 	}
 
 	// queue a callback to execute cppCoreTypes() on the main thread and wait until execution completes
@@ -544,7 +546,7 @@ void HaxeLib_cppCoreTypes(size_t a0, char a1, const char* a2) {
 		static void run(void* p) {
 			Data* data = (Data*) p;
 			try {
-				test::HxPublicApi_obj::cppCoreTypes(data->args.a0, data->args.a1, (const char*) data->args.a2);
+				test::HxPublicApi_obj::cppCoreTypes(data->args.a0, data->args.a1, data->args.a2);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -562,7 +564,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES
 int HaxeLib_somePublicMethod(int a0, double a1, float a2, signed char a3, short a4, int a5, int64_t a6, uint64_t a7, const char* a8) {
 	hx::NativeAttach autoAttach;
 	if (HaxeEmbed::isMainThread()) {
-		return test::HxPublicApi_obj::somePublicMethod(a0, a1, a2, a3, a4, a5, a6, a7, (const char*) a8);
+		return test::HxPublicApi_obj::somePublicMethod(a0, a1, a2, a3, a4, a5, a6, a7, a8);
 	}
 
 	// queue a callback to execute somePublicMethod() on the main thread and wait until execution completes
@@ -576,7 +578,7 @@ int HaxeLib_somePublicMethod(int a0, double a1, float a2, signed char a3, short 
 		static void run(void* p) {
 			Data* data = (Data*) p;
 			try {
-				data->ret = test::HxPublicApi_obj::somePublicMethod(data->args.a0, data->args.a1, data->args.a2, data->args.a3, data->args.a4, data->args.a5, data->args.a6, data->args.a7, (const char*) data->args.a8);
+				data->ret = test::HxPublicApi_obj::somePublicMethod(data->args.a0, data->args.a1, data->args.a2, data->args.a3, data->args.a4, data->args.a5, data->args.a6, data->args.a7, data->args.a8);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();

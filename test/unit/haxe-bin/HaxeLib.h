@@ -11,25 +11,25 @@
 #include <stdint.h>
 #include "MessagePayload.h"
 
+typedef const char* HaxeLib_NonTrivialAlias;
+enum HaxeLib_IntEnum2 {
+	AAA = 9,
+	BBB = 10,
+	CCC = 8
+};
+typedef enum HaxeLib_IntEnum2 HaxeLib_EnumAlias;
 typedef void HaxeLib_AliasA;
 typedef HaxeLib_AliasA HaxeLib_CppVoidX;
 typedef void (* function_Bool_Void) (bool);
 typedef void (* function_Void) (void);
 typedef int (* function_Int) (void);
-typedef const char* (* function_Int_String) (int);
-typedef int (* function_String_Int) (const char*);
-typedef int* (* function_cpp_Pointer_Int__cpp_Pointer_Int_) (int*);
-typedef const char* (* function_CustomStar_Int__String) (int*);
-typedef function_CustomStar_Int__String HaxeLib_FunctionAlias;
+typedef const char* (* function_Int_cpp_ConstCharStar) (int);
+typedef int* (* function_cpp_Star_Int__cpp_Star_Int_) (int*);
+typedef const char* (* function_CustomStar_Int__cpp_ConstCharStar) (int*);
+typedef function_CustomStar_Int__cpp_ConstCharStar HaxeLib_FunctionAlias;
 enum HaxeLib_IntEnumAbstract {
 	A = 0,
 	B = 1
-};
-typedef enum HaxeLib_IntEnumAbstract HaxeLib_EnumAlias;
-enum HaxeLib_IndirectlyReferencedEnum {
-	AAA = 9,
-	BBB = 10,
-	CCC = 8
 };
 
 typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
@@ -64,7 +64,7 @@ extern "C" {
 	 * @param b some string
 	 * @returns void
 	 */
-	void HaxeLib_voidRtn(int a, const char* b);
+	void HaxeLib_voidRtn(int a, const char* b, HaxeLib_NonTrivialAlias c, HaxeLib_EnumAlias e);
 
 	void HaxeLib_noArgsNoReturn();
 
@@ -87,7 +87,7 @@ extern "C" {
 
 	int64_t* HaxeLib_hxcppPointers(function_Bool_Void assert, void* pointer, int64_t* int64Array, int int64ArrayLength, const void* constPointer);
 
-	function_Int_String HaxeLib_hxcppCallbacks(function_Bool_Void assert, function_Void voidVoid, function_Int voidInt, function_Int_String intString, function_String_Int stringInt, function_cpp_Pointer_Int__cpp_Pointer_Int_ pointers, HaxeLib_FunctionAlias fnAlias);
+	function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void assert, function_Void voidVoid, function_Int voidInt, function_Int_cpp_ConstCharStar intString, function_cpp_Star_Int__cpp_Star_Int_ pointers, HaxeLib_FunctionAlias fnAlias);
 
 	MessagePayload HaxeLib_externStruct(MessagePayload v);
 
@@ -95,7 +95,7 @@ extern "C" {
 
 	void HaxeLib_badOptional(float opt, float notOpt);
 
-	void HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract e, const char* s, HaxeLib_EnumAlias a, enum HaxeLib_IndirectlyReferencedEnum* i, enum HaxeLib_IndirectlyReferencedEnum** ii);
+	enum HaxeLib_IntEnum2 HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract e, const char* s, HaxeLib_EnumAlias a);
 
 	void HaxeLib_cppCoreTypes(size_t sizet, char char_, const char* constCharStar);
 
