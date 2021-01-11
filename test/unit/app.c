@@ -66,6 +66,8 @@ int main(void) {
 
 	log("Testing calls to haxe code");
 
+	logf("GC Memory: %d", HaxeLib_Main_hxcppGcMemUsage());
+
 	assert(HaxeLib_callInMainThread(123.4));
 	assert(HaxeLib_callInExternalThread(567.8));
 	assert(HaxeLib_add(3, 4) == 7);
@@ -110,6 +112,25 @@ int main(void) {
 	sleep(1);
 	logf("-> HaxeLib_Main_getLoopCount() => %d", HaxeLib_Main_getLoopCount());
 	assert(HaxeLib_Main_getLoopCount() > 10);
+
+	// try loads of calls to haxe
+	log("Trying loads of calls into the haxe main thread to measure synchronization and memory costs ...");
+	for (int i = 0; i < 1000 * 1000; i++) {
+		HaxeLib_noArgsNoReturn();
+	}
+
+	logf("GC Memory: %d", HaxeLib_Main_hxcppGcMemUsage());
+
+	log("Allocation a bunch of data in haxe");
+
+	HaxeLib_allocateABunchOfData();
+	HaxeLib_allocateABunchOfDataExternalThread();
+
+	logf("GC Memory (before major collection): %d", HaxeLib_Main_hxcppGcMemUsage());
+	log("Running major GC collection");
+	HaxeLib_Main_hxcppGcRun(true);
+	logf("GC Memory (after major collection): %d", HaxeLib_Main_hxcppGcMemUsage());
+	logf("GC Memory: %d", HaxeLib_Main_hxcppGcMemUsage());
 
 	// check unhandled exception callback fires
 	log("Testing triggering exception in haxe"); // this is asynchronous

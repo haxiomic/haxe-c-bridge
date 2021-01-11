@@ -42,7 +42,7 @@ extern "C" {
 	/**
 	 * Initializes a haxe thread that remains alive indefinitely and executes the user's haxe main()
 	 * 
-	 * This must be first before calling haxe functions
+	 * This must be first before calling haxe functions (otherwise those calls will hang waiting for a response from the haxe thread)
 	 * 
 	 * @param unhandledExceptionCallback a callback to execute if an unhandled exception occurs on the haxe thread. The haxe thread will continue processing events after an unhandled exception. Use `NULL` for no callback
 	 * @returns `NULL` if the thread initializes successfully or a null terminated C string if an error occurs during initialization
@@ -52,6 +52,8 @@ extern "C" {
 	/**
 	 * Ends the haxe thread after it finishes processing pending events (events scheduled in the future will not be executed). Once ended, it cannot be restarted
 	 * 
+	 * No more calls to main-thread haxe functions can be made (as these will hang waiting for a response from the main thread)
+	 *
 	 * If the haxe thread is active it will blocks until the haxe thread has finished (unless executed on the haxe main thread)
 	 * 
 	 * Thread-safety: May be called on a different thread to `HaxeLib_startHaxeThread`
@@ -60,6 +62,12 @@ extern "C" {
 	bool HaxeLib_stopHaxeThread();
 
 	int HaxeLib_Main_getLoopCount();
+
+	int HaxeLib_Main_hxcppGcMemUsage();
+
+	int HaxeLib_Main_hxcppGcMemUsageExternal();
+
+	void HaxeLib_Main_hxcppGcRun(bool major);
 
 	/**
 	 * Some doc
@@ -93,6 +101,16 @@ extern "C" {
 	function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void assert, function_Void voidVoid, function_Int voidInt, function_Int_cpp_ConstCharStar intString, function_cpp_Star_Int__cpp_Star_Int_ pointers, HaxeLib_FunctionAlias fnAlias, function_MessagePayload_Void fnStruct);
 
 	MessagePayload HaxeLib_externStruct(MessagePayload v, MessagePayload* vStar);
+
+	/**
+	 * Test the GC behavior, runs on haxe main thread
+	 */
+	void HaxeLib_allocateABunchOfData();
+
+	/**
+	 * Test the GC behavior, runs on external (but hxcpp attached) thread
+	 */
+	void HaxeLib_allocateABunchOfDataExternalThread();
 
 	void HaxeLib_optional(float single);
 

@@ -1,3 +1,4 @@
+import cpp.vm.Gc;
 import cpp.Native;
 import cpp.Callable;
 import cpp.ConstCharStar;
@@ -35,6 +36,18 @@ class Main {
 
 	static public function getLoopCount(): Int {
 		return staticLoopCount;
+	}
+
+	static public function hxcppGcMemUsage(): Int {
+		return Gc.memUsage();
+	}
+
+	@externalThread static public function hxcppGcMemUsageExternal(): Int {
+		return Gc.memUsage();
+	}
+
+	static public function hxcppGcRun(major: Bool): Void {
+		Gc.run(major);
 	}
 
 }
@@ -167,6 +180,16 @@ class PublicCApi {
 		vStar.someFloat = 12.0;
 		v.someFloat *= 2;
 		return v;
+	}
+	
+	/** Test the GC behavior, runs on haxe main thread **/
+	static public function allocateABunchOfData(): Void {
+		var array = [for(i in 0...1000) for (j in 0...1000) 'bunch-of-data'];
+	}
+
+	/** Test the GC behavior, runs on external (but hxcpp attached) thread **/
+	static public function allocateABunchOfDataExternalThread(): Void {
+		var array = [for(i in 0...1000) for (j in 0...1000) 'bunch-of-data'];
 	}
 
 	// optional not supported; all args are required when calling from C
