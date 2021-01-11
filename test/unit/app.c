@@ -3,6 +3,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
+#include <time.h>
+#include <inttypes.h>
 
 #include "haxe-bin/MessagePayload.h"
 #include "haxe-bin/HaxeLib.h"
@@ -108,19 +110,27 @@ int main(void) {
 	assert(HaxeLib_enumTypes(B, "AAA", AAA) == BBB);
 
 	// sleep one second and verify the haxe thread event loop continued to run
-	log("sleeping 1s to let the haxe thread event loop run (each loop waits 1ms)");
+	log("sleeping 1s to let the haxe thread event loop run");
 	sleep(1);
 	logf("-> HaxeLib_Main_getLoopCount() => %d", HaxeLib_Main_getLoopCount());
 	assert(HaxeLib_Main_getLoopCount() > 10);
 
 	// try loads of calls to haxe
-	log("Trying loads of calls into the haxe main thread to measure synchronization and memory costs ...");
-	for (int i = 0; i < 1000 * 1000; i++) {
+	int64_t callCount = 1000 * 1000 * 1000;
+	logf("Trying %" PRId64 " calls into the haxe main thread to measure synchronization and memory costs ...", callCount);
+	HaxeLib_Main_printTime();
+	clock_t start = clock(), dt;
+	for (int64_t i = 0; i < callCount; i++) {
 		HaxeLib_noArgsNoReturn();
 	}
+	dt = clock() - start;
+	int dt_ms = dt * 1000 / CLOCKS_PER_SEC;
+	logf("-> total time: %d (ms)", dt_ms);
+	logf("-> per call: %f (ms)", (double) dt_ms / (callCount));
 
 	logf("GC Memory: %d", HaxeLib_Main_hxcppGcMemUsage());
 
+	// test gc, ensure we have no issues with leaks
 	log("Allocation a bunch of data in haxe");
 
 	HaxeLib_allocateABunchOfData();

@@ -23,13 +23,13 @@ class Main {
 	static var staticLoopCount: Int;
 
 	static function main() {
-		trace('main()');
-		pack.ExampleClass;
+		trace('main(): Hello from haxe ${Macro.getHaxeVersion()} and hxcp ${Macro.getHxcppVersion()}');
+		pack.ExampleClass; // make sure example class is referenced so the c api is generated
 
 		var i = 0;
 		function loop() {
 			staticLoopCount++;
-			haxe.Timer.delay(loop, 1);
+			haxe.Timer.delay(loop, 0);
 		}
 		loop();
 	}
@@ -48,6 +48,10 @@ class Main {
 
 	static public function hxcppGcRun(major: Bool): Void {
 		Gc.run(major);
+	}
+
+	static public function printTime(): Void {
+		trace(Date.now().toString());
 	}
 
 }
@@ -184,12 +188,12 @@ class PublicCApi {
 	
 	/** Test the GC behavior, runs on haxe main thread **/
 	static public function allocateABunchOfData(): Void {
-		var array = [for(i in 0...1000) for (j in 0...1000) 'bunch-of-data'];
+		var array = [for(i in 0...1000) for (j in 0...1000) ['bunch-of-data']];
 	}
 
 	/** Test the GC behavior, runs on external (but hxcpp attached) thread **/
-	static public function allocateABunchOfDataExternalThread(): Void {
-		var array = [for(i in 0...1000) for (j in 0...1000) 'bunch-of-data'];
+	@externalThread static public function allocateABunchOfDataExternalThread(): Void {
+		var array = [for(i in 0...1000) for (j in 0...1000) ['bunch-of-data']];
 	}
 
 	// optional not supported; all args are required when calling from C

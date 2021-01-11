@@ -69,6 +69,8 @@ extern "C" {
 
 	void HaxeLib_Main_hxcppGcRun(bool major);
 
+	void HaxeLib_Main_printTime();
+
 	/**
 	 * Some doc
 	 * @param a some integer
@@ -127,9 +129,9 @@ extern "C" {
 
 	void HaxeLib_throwException();
 
-	const char* HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate();
+	int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate();
 
-	const char* HaxeLib_pack_ExampleClass_example();
+	int HaxeLib_pack_ExampleClass_example();
 
 #ifdef __cplusplus
 }

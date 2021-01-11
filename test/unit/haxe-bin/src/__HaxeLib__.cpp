@@ -259,6 +259,43 @@ void HaxeLib_Main_hxcppGcRun(bool a0) {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
+void HaxeLib_Main_printTime() {
+	struct Data {
+		struct {} args;
+		HxSemaphore lock;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				Main_obj::printTime();
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+
+	Data data = { {} };
+
+	{
+		hx::NativeAttach autoAttach;
+		if (HaxeEmbed::isMainThread()) {
+			return Main_obj::printTime();
+		}
+		// queue a callback to execute printTime() on the main thread and wait until execution completes
+		HaxeEmbed::queueOnMainThread(Callback::run, &data);
+	}
+						
+	// wait outside the NativeAttached region to prevent hangs if hxcpp performs a collection
+	data.lock.Wait();
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
 void HaxeLib_voidRtn(int a0, const char* a1, HaxeLib_NonTrivialAlias a2, HaxeLib_EnumAlias a3) {
 	struct Data {
 		struct {int a0; const char* a1; HaxeLib_NonTrivialAlias a2; HaxeLib_EnumAlias a3;} args;
@@ -650,39 +687,8 @@ void HaxeLib_allocateABunchOfData() {
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
 void HaxeLib_allocateABunchOfDataExternalThread() {
-	struct Data {
-		struct {} args;
-		HxSemaphore lock;
-	};
-	struct Callback {
-		static void run(void* p) {
-			// executed within the haxe main thread
-			Data* data = (Data*) p;
-			try {
-				test::HxPublicApi_obj::allocateABunchOfDataExternalThread();
-				data->lock.Set();
-			} catch(Dynamic runtimeException) {
-				data->lock.Set();
-				throw runtimeException;
-			}
-		}
-	};
-
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
-
-	Data data = { {} };
-
-	{
-		hx::NativeAttach autoAttach;
-		if (HaxeEmbed::isMainThread()) {
-			return test::HxPublicApi_obj::allocateABunchOfDataExternalThread();
-		}
-		// queue a callback to execute allocateABunchOfDataExternalThread() on the main thread and wait until execution completes
-		HaxeEmbed::queueOnMainThread(Callback::run, &data);
-	}
-						
-	// wait outside the NativeAttached region to prevent hangs if hxcpp performs a collection
-	data.lock.Wait();
+	hx::NativeAttach autoAttach;
+	return test::HxPublicApi_obj::allocateABunchOfDataExternalThread();
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
@@ -912,18 +918,18 @@ void HaxeLib_throwException() {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-const char* HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate() {
+int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate() {
 	struct Data {
 		struct {} args;
 		HxSemaphore lock;
-		const char* ret;
+		int ret;
 	};
 	struct Callback {
 		static void run(void* p) {
 			// executed within the haxe main thread
 			Data* data = (Data*) p;
 			try {
-				data->ret = pack::_ExampleClass::ExampleClassPrivate_obj::examplePrivate();
+				data->ret = pack::_ExampleClass::ExampleClassPrivate::examplePrivate();
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -939,7 +945,7 @@ const char* HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate() {
 	{
 		hx::NativeAttach autoAttach;
 		if (HaxeEmbed::isMainThread()) {
-			return pack::_ExampleClass::ExampleClassPrivate_obj::examplePrivate();
+			return pack::_ExampleClass::ExampleClassPrivate::examplePrivate();
 		}
 		// queue a callback to execute examplePrivate() on the main thread and wait until execution completes
 		HaxeEmbed::queueOnMainThread(Callback::run, &data);
@@ -951,11 +957,11 @@ const char* HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate() {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-const char* HaxeLib_pack_ExampleClass_example() {
+int HaxeLib_pack_ExampleClass_example() {
 	struct Data {
 		struct {} args;
 		HxSemaphore lock;
-		const char* ret;
+		int ret;
 	};
 	struct Callback {
 		static void run(void* p) {
