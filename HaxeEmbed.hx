@@ -216,7 +216,7 @@ class HaxeEmbed {
 				/**
 				 * Initializes a haxe thread that remains alive indefinitely and executes the user\'s haxe main()
 				 * 
-				 * This must be first before calling haxe functions
+				 * This must be first before calling haxe functions (otherwise those calls will hang waiting for a response from the haxe thread)
 				 * 
 				 * @param unhandledExceptionCallback a callback to execute if an unhandled exception occurs on the haxe thread. The haxe thread will continue processing events after an unhandled exception. Use `NULL` for no callback
 				 * @returns `NULL` if the thread initializes successfully or a null terminated C string if an error occurs during initialization
@@ -226,6 +226,8 @@ class HaxeEmbed {
 				/**
 				 * Ends the haxe thread after it finishes processing pending events (events scheduled in the future will not be executed). Once ended, it cannot be restarted
 				 * 
+				 * No more calls to main-thread haxe functions can be made (as these will hang waiting for a response from the main thread)
+				 *
 				 * If the haxe thread is active it will blocks until the haxe thread has finished (unless executed on the haxe main thread)
 				 * 
 				 * Thread-safety: May be called on a different thread to `${namespace}_startHaxeThread`
@@ -258,6 +260,7 @@ class HaxeEmbed {
 			#include <hx/Thread.h>
 			#include <hx/StdLibs.h>
 			#include <HaxeEmbed.h>
+			#include <assert.h>
 
 			#include "../${namespace}.h"
 
@@ -386,11 +389,11 @@ class HaxeEmbed {
 			}
 
 		')
-		+ ctx.functionDeclarations.map(generateFunctionImplementation).join('\n') + '\n'
+		+ ctx.functionDeclarations.map(d -> generateFunctionImplementation(namespace, d)).join('\n') + '\n'
 		;
 	}
 
-	static function generateFunctionImplementation(d: CDeclaration) {
+	static function generateFunctionImplementation(namespace: String, d: CDeclaration) {
 		var signature = switch d.kind {case Function(sig): sig; default: null;};
 		var haxeFunction = functionMap.get(signature.name);
 		var hasReturnValue = !haxeFunction.rootCTypes.ret.match(Ident('void'));
@@ -476,20 +479,12 @@ class HaxeEmbed {
 					HXCPP_EXTERN_CLASS_ATTRIBUTES
 				')
 				+ CPrinter.printDeclaration(d, false) + ' {\n'
-				+ indent(1, 
-					code('
-						hx::NativeAttach autoAttach;
-						if (HaxeEmbed::isMainThread()) {
-							return ${callWithArgs(signature.args.map(a->a.name))};
-						}
-
-						// queue a callback to execute ${haxeFunction.field.name}() on the main thread and wait until execution completes
-					')
-					+ CPrinter.printDeclaration(fnDataDeclaration) + ';\n'
+				+ indent(1,
+					CPrinter.printDeclaration(fnDataDeclaration) + ';\n'
 					+ code('
-
 						struct Callback {
 							static void run(void* p) {
+								// executed within the haxe main thread
 								$fnDataTypeName* $fnDataName = ($fnDataTypeName*) p;
 								try {
 									${hasReturnValue ?
@@ -504,8 +499,20 @@ class HaxeEmbed {
 							}
 						};
 
+						assert(threadRunning && "haxe thread not running, use ${namespace}_initializeHaxeThread() to activate the haxe thread");
+
 						$fnDataTypeName $fnDataName = { {${signature.args.map(a->a.name).join(', ')}} };
-						HaxeEmbed::queueOnMainThread(Callback::run, &$fnDataName);
+
+						{
+							hx::NativeAttach autoAttach;
+							if (HaxeEmbed::isMainThread()) {
+								return ${callWithArgs(signature.args.map(a->a.name))};
+							}
+							// queue a callback to execute ${haxeFunction.field.name}() on the main thread and wait until execution completes
+							HaxeEmbed::queueOnMainThread(Callback::run, &$fnDataName);
+						}
+						
+						// wait outside the NativeAttached region to prevent hangs if hxcpp performs a collection
 						$fnDataName.lock.Wait();
 					')
 					+ if (hasReturnValue) code('
