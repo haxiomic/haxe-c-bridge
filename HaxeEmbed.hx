@@ -378,8 +378,8 @@ class HaxeEmbed {
 						if (!isMain) {
 							threadEndSemaphore.Wait();
 						}
+						stopped = true;
 					}
-					stopped = true;
 					threadManageMutex.Unlock();
 				}
 				return stopped;
