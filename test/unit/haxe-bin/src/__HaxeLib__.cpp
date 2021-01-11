@@ -12,6 +12,7 @@
 #include "../HaxeLib.h"
 
 #include <test/HxPublicApi.h>
+#include <Main.h>
 #include <pack/_ExampleClass/ExampleClassPrivate.h>
 #include <pack/ExampleClass.h>
 
@@ -128,11 +129,44 @@ bool HaxeLib_stopHaxeThread() {
 			if (!isMain) {
 				threadEndSemaphore.Wait();
 			}
+			stopped = true;
 		}
-		stopped = true;
 		threadManageMutex.Unlock();
 	}
 	return stopped;
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+int HaxeLib_Main_getLoopCount() {
+	hx::NativeAttach autoAttach;
+	if (HaxeEmbed::isMainThread()) {
+		return Main_obj::getLoopCount();
+	}
+
+	// queue a callback to execute getLoopCount() on the main thread and wait until execution completes
+	struct Data {
+		struct {} args;
+		HxSemaphore lock;
+		int ret;
+	};
+
+	struct Callback {
+		static void run(void* p) {
+			Data* data = (Data*) p;
+			try {
+				data->ret = Main_obj::getLoopCount();
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	Data data = { {} };
+	HaxeEmbed::queueOnMainThread(Callback::run, &data);
+	data.lock.Wait();
+	return data.ret;
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
@@ -369,15 +403,15 @@ int64_t* HaxeLib_hxcppPointers(function_Bool_Void a0, void* a1, int64_t* a2, int
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void a0, function_Void a1, function_Int a2, function_Int_cpp_ConstCharStar a3, function_cpp_Star_Int__cpp_Star_Int_ a4, HaxeLib_FunctionAlias a5) {
+function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void a0, function_Void a1, function_Int a2, function_Int_cpp_ConstCharStar a3, function_cpp_Star_Int__cpp_Star_Int_ a4, HaxeLib_FunctionAlias a5, function_MessagePayload_Void a6) {
 	hx::NativeAttach autoAttach;
 	if (HaxeEmbed::isMainThread()) {
-		return test::HxPublicApi_obj::hxcppCallbacks(a0, a1, a2, a3, a4, a5);
+		return test::HxPublicApi_obj::hxcppCallbacks(a0, a1, a2, a3, a4, a5, a6);
 	}
 
 	// queue a callback to execute hxcppCallbacks() on the main thread and wait until execution completes
 	struct Data {
-		struct {function_Bool_Void a0; function_Void a1; function_Int a2; function_Int_cpp_ConstCharStar a3; function_cpp_Star_Int__cpp_Star_Int_ a4; HaxeLib_FunctionAlias a5;} args;
+		struct {function_Bool_Void a0; function_Void a1; function_Int a2; function_Int_cpp_ConstCharStar a3; function_cpp_Star_Int__cpp_Star_Int_ a4; HaxeLib_FunctionAlias a5; function_MessagePayload_Void a6;} args;
 		HxSemaphore lock;
 		function_Int_cpp_ConstCharStar ret;
 	};
@@ -386,7 +420,7 @@ function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void a0, fun
 		static void run(void* p) {
 			Data* data = (Data*) p;
 			try {
-				data->ret = test::HxPublicApi_obj::hxcppCallbacks(data->args.a0, data->args.a1, data->args.a2, data->args.a3, data->args.a4, data->args.a5);
+				data->ret = test::HxPublicApi_obj::hxcppCallbacks(data->args.a0, data->args.a1, data->args.a2, data->args.a3, data->args.a4, data->args.a5, data->args.a6);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -395,22 +429,22 @@ function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void a0, fun
 		}
 	};
 
-	Data data = { {a0, a1, a2, a3, a4, a5} };
+	Data data = { {a0, a1, a2, a3, a4, a5, a6} };
 	HaxeEmbed::queueOnMainThread(Callback::run, &data);
 	data.lock.Wait();
 	return data.ret;
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-MessagePayload HaxeLib_externStruct(MessagePayload a0) {
+MessagePayload HaxeLib_externStruct(MessagePayload a0, MessagePayload* a1) {
 	hx::NativeAttach autoAttach;
 	if (HaxeEmbed::isMainThread()) {
-		return test::HxPublicApi_obj::externStruct(a0);
+		return test::HxPublicApi_obj::externStruct(a0, a1);
 	}
 
 	// queue a callback to execute externStruct() on the main thread and wait until execution completes
 	struct Data {
-		struct {MessagePayload a0;} args;
+		struct {MessagePayload a0; MessagePayload* a1;} args;
 		HxSemaphore lock;
 		MessagePayload ret;
 	};
@@ -419,7 +453,7 @@ MessagePayload HaxeLib_externStruct(MessagePayload a0) {
 		static void run(void* p) {
 			Data* data = (Data*) p;
 			try {
-				data->ret = test::HxPublicApi_obj::externStruct(data->args.a0);
+				data->ret = test::HxPublicApi_obj::externStruct(data->args.a0, data->args.a1);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -428,7 +462,7 @@ MessagePayload HaxeLib_externStruct(MessagePayload a0) {
 		}
 	};
 
-	Data data = { {a0} };
+	Data data = { {a0, a1} };
 	HaxeEmbed::queueOnMainThread(Callback::run, &data);
 	data.lock.Wait();
 	return data.ret;
@@ -561,24 +595,24 @@ void HaxeLib_cppCoreTypes(size_t a0, char a1, const char* a2) {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-int HaxeLib_somePublicMethod(int a0, double a1, float a2, signed char a3, short a4, int a5, int64_t a6, uint64_t a7, const char* a8) {
+uint64_t HaxeLib_cppCoreTypes2(int a0, double a1, float a2, signed char a3, short a4, int a5, int64_t a6, uint64_t a7, const char* a8) {
 	hx::NativeAttach autoAttach;
 	if (HaxeEmbed::isMainThread()) {
-		return test::HxPublicApi_obj::somePublicMethod(a0, a1, a2, a3, a4, a5, a6, a7, a8);
+		return test::HxPublicApi_obj::cppCoreTypes2(a0, a1, a2, a3, a4, a5, a6, a7, a8);
 	}
 
-	// queue a callback to execute somePublicMethod() on the main thread and wait until execution completes
+	// queue a callback to execute cppCoreTypes2() on the main thread and wait until execution completes
 	struct Data {
 		struct {int a0; double a1; float a2; signed char a3; short a4; int a5; int64_t a6; uint64_t a7; const char* a8;} args;
 		HxSemaphore lock;
-		int ret;
+		uint64_t ret;
 	};
 
 	struct Callback {
 		static void run(void* p) {
 			Data* data = (Data*) p;
 			try {
-				data->ret = test::HxPublicApi_obj::somePublicMethod(data->args.a0, data->args.a1, data->args.a2, data->args.a3, data->args.a4, data->args.a5, data->args.a6, data->args.a7, data->args.a8);
+				data->ret = test::HxPublicApi_obj::cppCoreTypes2(data->args.a0, data->args.a1, data->args.a2, data->args.a3, data->args.a4, data->args.a5, data->args.a6, data->args.a7, data->args.a8);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();

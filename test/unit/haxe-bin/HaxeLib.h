@@ -27,6 +27,7 @@ typedef const char* (* function_Int_cpp_ConstCharStar) (int);
 typedef int* (* function_cpp_Star_Int__cpp_Star_Int_) (int*);
 typedef const char* (* function_CustomStar_Int__cpp_ConstCharStar) (int*);
 typedef function_CustomStar_Int__cpp_ConstCharStar HaxeLib_FunctionAlias;
+typedef void (* function_MessagePayload_Void) (MessagePayload);
 enum HaxeLib_IntEnumAbstract {
 	A = 0,
 	B = 1
@@ -58,6 +59,8 @@ extern "C" {
 	 */
 	bool HaxeLib_stopHaxeThread();
 
+	int HaxeLib_Main_getLoopCount();
+
 	/**
 	 * Some doc
 	 * @param a some integer
@@ -87,9 +90,9 @@ extern "C" {
 
 	int64_t* HaxeLib_hxcppPointers(function_Bool_Void assert, void* pointer, int64_t* int64Array, int int64ArrayLength, const void* constPointer);
 
-	function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void assert, function_Void voidVoid, function_Int voidInt, function_Int_cpp_ConstCharStar intString, function_cpp_Star_Int__cpp_Star_Int_ pointers, HaxeLib_FunctionAlias fnAlias);
+	function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void assert, function_Void voidVoid, function_Int voidInt, function_Int_cpp_ConstCharStar intString, function_cpp_Star_Int__cpp_Star_Int_ pointers, HaxeLib_FunctionAlias fnAlias, function_MessagePayload_Void fnStruct);
 
-	MessagePayload HaxeLib_externStruct(MessagePayload v);
+	MessagePayload HaxeLib_externStruct(MessagePayload v, MessagePayload* vStar);
 
 	void HaxeLib_optional(float single);
 
@@ -102,7 +105,7 @@ extern "C" {
 	/**
 	 * single-line doc
 	 */
-	int HaxeLib_somePublicMethod(int i, double f, float s, signed char i8, short i16, int i32, int64_t i64, uint64_t ui64, const char* str);
+	uint64_t HaxeLib_cppCoreTypes2(int i, double f, float s, signed char i8, short i16, int i32, int64_t i64, uint64_t ui64, const char* str);
 
 	void HaxeLib_throwException();
 

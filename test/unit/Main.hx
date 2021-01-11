@@ -16,9 +16,10 @@ import cpp.Star;
 	<flag value="-fsanitize=address" />
 </linker>
 ')
+@:build(HaxeEmbed.build())
 class Main {
 
-	static var s: Int;
+	static var staticLoopCount: Int;
 
 	static function main() {
 		trace('main()');
@@ -26,10 +27,14 @@ class Main {
 
 		var i = 0;
 		function loop() {
-			trace('loop ${i++} ${s++}');
-			haxe.Timer.delay(loop, 1000);
+			staticLoopCount++;
+			haxe.Timer.delay(loop, 1);
 		}
 		loop();
+	}
+
+	static public function getLoopCount(): Int {
+		return staticLoopCount;
 	}
 
 }
@@ -135,8 +140,8 @@ class PublicCApi {
 		voidInt: Callable<() -> Int>,
 		intString: Callable<(a: Int) -> ConstCharStar>,
 		pointers: Callable<(Star<Int>) -> Star<Int>>,
-		fnAlias: Callable<FunctionAlias>
-		// callableCallable: Callable<(cb: Int -> Int) -> Void>
+		fnAlias: Callable<FunctionAlias>,
+		fnStruct: Callable<MessagePayload -> Void>
 	): Callable<(a: Int) -> ConstCharStar> {
 		var hi = intString(42);
 		assert(hi == "hi");
@@ -145,11 +150,21 @@ class PublicCApi {
 		var result = pointers(ip);
 		assert(result == ip);
 		assert(i == 21);
+
+		// send a struct
+		var msg = MessagePayload.stackAlloc(); // make a stack-allocated struct instance
+		msg.someFloat = 42.0;
+		// copy "hello" into cStr[10]
+		var msgStr = "hello";
+		Native.nativeMemcpy(cast msg.cStr, cast (msgStr: ConstCharStar), Std.int(Math.min(msgStr.length, 10)));
+		fnStruct(msg);
+
+		// fnStruct()
 		return intString;
 	}
 
-	static public function externStruct(v: MessagePayload): MessagePayload {
-		// @! need test Star<MessagePayload>
+	static public function externStruct(v: MessagePayload, vStar: Star<MessagePayload>): MessagePayload {
+		vStar.someFloat = 12.0;
 		v.someFloat *= 2;
 		return v;
 	}
@@ -167,9 +182,8 @@ class PublicCApi {
 	static public function cppCoreTypes(sizet: SizeT, char: cpp.Char, constCharStar: cpp.ConstCharStar): Void { }
 
 	/** single-line doc **/
-	static public function somePublicMethod(i: Int, f: Float, s: Single, i8: cpp.Int8, i16: cpp.Int16, i32: cpp.Int32, i64: cpp.Int64, ui64: cpp.UInt64, str: ConstCharStar): Int {
-		trace('somePublicMethod()');
-		return -1;
+	static public function cppCoreTypes2(i: Int, f: Float, s: Single, i8: cpp.Int8, i16: cpp.Int16, i32: cpp.Int32, i64: cpp.Int64, ui64: cpp.UInt64, str: ConstCharStar): cpp.UInt64 {
+		return 1;
 	}
 
 	static public function throwException(): Void {

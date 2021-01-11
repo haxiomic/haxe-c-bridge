@@ -7,21 +7,21 @@
 #include "haxe-bin/MessagePayload.h"
 #include "haxe-bin/HaxeLib.h"
 
-#define log(str) printf("%s:%d: " str, __FILE__, __LINE__);
-#define logf(fmt, ...) printf("%s:%d: " fmt, __FILE__, __LINE__, __VA_ARGS__);
+#define log(str) printf("%s:%d: " str "\n", __FILE__, __LINE__)
+#define logf(fmt, ...) printf("%s:%d: " fmt "\n", __FILE__, __LINE__, __VA_ARGS__)
 
 // called from the haxe main thread
 // the thread will continue running
 void onHaxeException(const char* info) {
-	logf("Uncaught haxe exception (manually stopping haxe thread): %s\n", info);
+	logf("onHaxeException (manually stopping haxe thread): \"%s\"", info);
 	HaxeLib_stopHaxeThread();
-	log("thread stopped\n");
+	log("-> thread stopped");
 }
 
 // we pass this to our haxe program via setMessageSync to test calling into native code from haxe
 // it will be called on the haxe thread
 void nativeCallback(int number) {
-	logf("native callback %d\n", number);
+	logf("native callback %d", number);
 }
 
 void assertCallback(bool v) {
@@ -46,17 +46,25 @@ int* fnPointers(int* i) {
 const char* fnIntStarStr(int* i) {
 	return "ok";
 }
+void fnStruct(MessagePayload msg) {
+	assert(msg.someFloat == 42.0);
+	assert(strcmp(msg.cStr, "hello") == 0);
+}
 
 int main(void) {
-	log("Hello From C\n");
-
-	HaxeLib_stopHaxeThread();
+	log("Hello From C");
 	
+	// we can call stop without a haxe thread, but it should return false and do nothing
+	assert(!HaxeLib_stopHaxeThread());
+	
+	log("Starting haxe thread");
 	const char* result = HaxeLib_initializeHaxeThread(onHaxeException);
 	if (result != NULL) {
-		logf("Failed to initialize haxe: %s\n", result);
+		logf("Failed to initialize haxe: %s", result);
 	}
 	assert(result == NULL);
+
+	log("Testing calls to haxe code");
 
 	assert(HaxeLib_callInMainThread(123.4));
 	assert(HaxeLib_callInExternalThread(567.8));
@@ -81,25 +89,47 @@ int main(void) {
 		fnInt,
 		fnIntString,
 		fnPointers,
-		fnIntStarStr
+		fnIntStarStr,
+		fnStruct
 	);
 	assert(ret == fnIntString);
 
+	// struct
+	MessagePayload inputStruct = {
+		.someFloat = 24.0,
+		.cStr = "hello"
+	};
+	MessagePayload retStruct = HaxeLib_externStruct(inputStruct, &inputStruct);
+	assert(inputStruct.someFloat == 12.0);
+	assert(retStruct.someFloat == 24.0 * 2);
+
+	assert(HaxeLib_enumTypes(B, "AAA", AAA) == BBB);
+
+	// sleep one second and verify the haxe thread event loop continued to run
+	log("sleeping 1s to let the haxe thread event loop run (each loop waits 1ms)");
+	sleep(1);
+	logf("-> HaxeLib_Main_getLoopCount() => %d", HaxeLib_Main_getLoopCount());
+	assert(HaxeLib_Main_getLoopCount() > 10);
+
+	// check unhandled exception callback fires
+	log("Testing triggering exception in haxe"); // this is asynchronous
 	HaxeLib_throwException();
 
 	// end the haxe thread (this will block while the haxe thread finishes processing immediate pending events)
-	log("Stopping haxe thread\n");
+	log("Stopping haxe thread (manually)");
 	HaxeLib_stopHaxeThread();
 
 	// trying to reinitialize haxe thread should fail
-	log("Starting haxe thread\n");
+	log("Starting haxe thread");
 	result = HaxeLib_initializeHaxeThread(onHaxeException);
 	assert(result != NULL);
 	if (result != NULL) {
-		logf("Failed to initialize haxe: %s\n", result);
+		logf("Failed to initialize haxe: %s", result);
 	}
-	log("Stopping haxe thread\n");
+	log("Stopping haxe thread");
 	HaxeLib_stopHaxeThread();
+
+	log("All tests completed successfully");
 
 	return 0;
 }
