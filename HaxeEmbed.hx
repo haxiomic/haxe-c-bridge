@@ -4,7 +4,7 @@
 // fast path for when code gen isn't required
 class HaxeEmbed {
 	public static function build(?namespace: String) {
-		return Context.getBuildFields();
+		return haxe.macro.Context.getBuildFields();
 	}
 }
 
