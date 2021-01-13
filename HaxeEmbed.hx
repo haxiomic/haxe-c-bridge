@@ -1,6 +1,7 @@
 #if macro
 
-#if (display || display_details || target.name != cpp)
+	#if (display || display_details || target.name != cpp)
+
 // fast path for when code gen isn't required
 class HaxeEmbed {
 	public static function build(?namespace: String) {
@@ -8,7 +9,7 @@ class HaxeEmbed {
 	}
 }
 
-#else
+	#else
 
 import HaxeEmbed.CodeTools.*;
 import haxe.ds.ReadOnlyArray;
@@ -33,13 +34,13 @@ class HaxeEmbed {
 	static final noOutput = Sys.args().has('--no-output');
 	static final printer = new Printer();
 	
-	static var isFileGenCallbackSetup = false;
+	static var firstRun = true;
 
-	static final libName = determineLibName();
+	static final libName = getLibNameFromHaxeArgs();
 	static final compilerOutputDir = Compiler.getOutput();
 	// paths relative to the compiler output directory
 	static final headerPath = Path.join(['$libName.h']);
-	static final implementationPath = Path.join(['src', '__${libName}__.cpp']);
+	static final implementationPath = Path.join(['src', '__HaxeEmbedImpl__.cpp']);
 
 	static final implementationHeaders = new Array<CInclude>();
 	static final cConversionContext = new CConverterContext({
@@ -151,7 +152,7 @@ class HaxeEmbed {
 			}
 		}
 
-		if (!isFileGenCallbackSetup) {
+		if (firstRun) {
 			if (!noOutput) {
 				Context.onAfterTyping(_ -> {
 					var header = generateHeader(cConversionContext, libName);
@@ -170,12 +171,20 @@ class HaxeEmbed {
 				});
 			}
 
-			isFileGenCallbackSetup = true;
+			firstRun = false;
 		}
 
 		return fields.concat(newFields);
 	}
 
+	static macro function runUserMain() {
+		var mainClassPath = getMainFromHaxeArgs(Sys.args());
+		if (mainClassPath == null) {
+			return macro null;
+		} else {
+			return Context.parse('$mainClassPath.main()', Context.currentPos());
+		}
+	}
 
 	static function generateHeader(ctx: CConverterContext, namespace: String) {
 		var hasLibLink = Context.defined('dll_link') || Context.defined('static_link');
@@ -233,7 +242,7 @@ class HaxeEmbed {
 				 * Thread-safety: May be called on a different thread to `${namespace}_startHaxeThread`
 				 * @returns `true` if thread was stopped synchronously or `false` otherwise – this might be because the haxe thread was not running or another thread has already called `stopHaxeThread()`
 				 */
-				bool ${namespace}_stopHaxeThread();
+				int ${namespace}_stopHaxeThread();
 
 		')
 
@@ -261,6 +270,8 @@ class HaxeEmbed {
 			#include <hx/StdLibs.h>
 			#include <HaxeEmbed.h>
 			#include <assert.h>
+			#include <queue>
+			#include <utility>
 
 			#include "../${namespace}.h"
 
@@ -290,6 +301,29 @@ class HaxeEmbed {
 				}
 			}
 
+			namespace HaxeEmbedInternal {
+				typedef void (* MainThreadCallback)(void* data);
+				HxMutex queueMutex;
+				std::queue<std::pair<MainThreadCallback, void*>> queue;
+
+				void runInMainThread(MainThreadCallback callback, void* data) {
+					queueMutex.Lock();
+					queue.push(std::make_pair(callback, data));
+					queueMutex.Unlock();
+					HaxeEmbed::wakeMainThread();
+				}
+
+				// called on the haxe main thread
+				void processNativeCalls() {
+					AutoLock lock(queueMutex);
+					while(!queue.empty()) {
+						std::pair<MainThreadCallback, void*> pair = queue.front();
+						queue.pop();
+						pair.first(pair.second);
+					}
+				}
+			}
+
 			THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 				HX_TOP_OF_STACK
 				threadRunning = true;
@@ -315,16 +349,9 @@ class HaxeEmbed {
 				threadInitSemaphore.Set();
 
 				if (staticsInitialized) { // initialized without error
-					bool exitRequested = false;
-					if (firstRun) {
-						// this will block until all pending events created from main() have completed
-						exitRequested = HaxeEmbed::runUserMain(__hxcpp_main, haxeExceptionCallback);
-					}
 
-					// we want to keep alive the thread after main() has completed, so we run the event loop until we want to terminate the thread
-					if (!exitRequested) {
-						HaxeEmbed::endlessEventLoop(haxeExceptionCallback);
-					}
+					HaxeEmbed::mainThreadRun(HaxeEmbedInternal::processNativeCalls, haxeExceptionCallback);
+
 				}
 
 				threadRunning = false;
@@ -369,10 +396,10 @@ class HaxeEmbed {
 			}
 
 			HXCPP_EXTERN_CLASS_ATTRIBUTES
-			bool ${namespace}_stopHaxeThread() {
+			int ${namespace}_stopHaxeThread() {
 				// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on threadEndSemaphore
 				// the idea here is only one stopHaxeThread can running at a time, if stop has already been called, subsequent stops will return immediately
-				bool stopped = false;
+				int stopped = 0;
 				if (threadManageMutex.TryLock()) {
 					if (threadRunning) {
 						hx::NativeAttach autoAttach;
@@ -381,7 +408,7 @@ class HaxeEmbed {
 						if (!isMain) {
 							threadEndSemaphore.Wait();
 						}
-						stopped = true;
+						stopped = 1;
 					}
 					threadManageMutex.Unlock();
 				}
@@ -503,15 +530,8 @@ class HaxeEmbed {
 
 						$fnDataTypeName $fnDataName = { {${signature.args.map(a->a.name).join(', ')}} };
 
-						{
-							hx::NativeAttach autoAttach;
-							if (HaxeEmbed::isMainThread()) {
-								return ${callWithArgs(signature.args.map(a->a.name))};
-							}
-							// queue a callback to execute ${haxeFunction.field.name}() on the main thread and wait until execution completes
-							HaxeEmbed::queueOnMainThread(Callback::run, &$fnDataName);
-						}
-						
+						// queue a callback to execute ${haxeFunction.field.name}() on the main thread and wait until execution completes
+						HaxeEmbedInternal::runInMainThread(Callback::run, &$fnDataName);
 						// wait outside the NativeAttached region to prevent hangs if hxcpp performs a collection
 						$fnDataName.lock.Wait();
 					')
@@ -533,21 +553,17 @@ class HaxeEmbed {
 
 		This isn't rigorously defined but hopefully will produced nicely namespaced and unsurprising function names
 	**/
-	static function determineLibName(): Null<String> {
+	static function getLibNameFromHaxeArgs(): Null<String> {
 		var overrideName = Context.definedValue('haxe-embed-name');
 		if (overrideName != null && overrideName != '') {
 			return safeIdent(overrideName);
 		}
 
 		var args = Sys.args();
-
-		// return -m {path} or --main {class-path}
-		for (i in 0...args.length) {
-			var arg = args[i];
-			if (arg == '-m' || arg == '--main') {
-				var classPath = args[i + 1];
-				return safeIdent(classPath);
-			}
+		
+		var mainClassPath = getMainFromHaxeArgs(args);
+		if (mainClassPath != null) {
+			return safeIdent(mainClassPath);
 		}
 
 		// if no main is found, use first direct class reference
@@ -567,6 +583,19 @@ class HaxeEmbed {
 
 		// default to HaxeLibrary
 		return 'HaxeLibrary';
+	}
+
+	static function getMainFromHaxeArgs(args: Array<String>): Null<String> {
+		for (i in 0...args.length) {
+			var arg = args[i];
+			switch arg {
+				case '-m', '-main', '--main':
+					var classPath = args[i + 1];
+					return classPath;
+				default:
+			}
+		}
+		return null;
 	}
 
 	static function safeIdent(str: String) {
@@ -1208,11 +1237,19 @@ class CodeTools {
 
 }
 
-#end // (display || display_details || target.name != cpp)
+	#end // (display || display_details || target.name != cpp)
 
 #else
 
-// runtime types
+// runtime HaxeEmbed
+
+import cpp.Star;
+import cpp.Callable;
+import haxe.EntryPoint;
+import sys.thread.EventLoop;
+import sys.thread.Mutex;
+import sys.thread.Thread;
+import sys.thread.Lock;
 
 @:noCompletion
 @:keep
@@ -1223,48 +1260,38 @@ private class EndThreadException extends haxe.Exception {}
 @:noCompletion
 class HaxeEmbed {
 
-	static inline function getMainThread(): sys.thread.Thread {
-		return Internal.mainThread;
-	}
-
-	static public inline function isMainThread(): Bool {
-		return sys.thread.Thread.current() == getMainThread();
-	}
-
-	static public function queueOnMainThread(fn: cpp.Callable<cpp.Star<cpp.Void> -> Void>, data: cpp.Star<cpp.Void>): Void {
-		haxe.EntryPoint.runInMainThread(() -> {
-			fn(data);
-		});
-	}
-
-	/**
-		Executes the passed main function (which is expected to block while processing events)
-		@return `true` if thread exit was requested during execution
-	**/
-	static public function runUserMain(main: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>): Bool {
-		try main()
-		catch (e: EndThreadException) {
-			return true;
-		} catch (e: Any) {
-			onUnhandledException(Std.string(e));
-		}
-		return false;
-	}
-
-	/**
-		Keeps the main thread event loop alive (even after all events and promises are exhausted)
-	**/
 	@:noCompletion
-	static public function endlessEventLoop(onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) {
-		var current = sys.thread.Thread.current();
-		while (true) {
+	static macro function runUserMain() { /* implementation provided above in macro version of HaxeEmbed */ }
+
+	@:noCompletion
+	static public function mainThreadRun(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
+		Thread.initEventLoop();
+		EntryPoint.init();
+
+		var eventLoop = Thread.current().events;
+		Internal.mainThreadWaitLock = eventLoop.waitLock;
+
+		runUserMain();
+
+		// run always-alive event loop
+
+		while(true) {
 			try {
-				#if (haxe_ver >= "4.2.0")
-				current.events.loop();
-				current.events.wait();
-				#else
-				haxe.EntryPoint.run();
-				#end
+				// execute any queued native callbacks
+				processNativeCalls();
+
+				// normal event loop (blocks until all scheduled events are executed)
+				switch inline eventLoop.progress() {
+					case Now:
+						// continue to next loop
+					case AnyTime(null), Never:
+						// no scheduled events, wait until prompted
+						eventLoop.wait();
+					case AnyTime(time), At(time):
+						var timeout = time - Sys.time();
+						eventLoop.wait(Math.max(0, timeout));
+				}
+
 			} catch (e: EndThreadException) {
 				break;
 			} catch (e: Any) {
@@ -1273,10 +1300,21 @@ class HaxeEmbed {
 		}
 	}
 
+	// called from _unattached_ external thread, must not allocate in hxcpp
+	@:noDebug
+	static public function wakeMainThread() {
+		inline Internal.mainThreadWaitLock.release();
+	}
+
+	static public inline function isMainThread(): Bool {
+		return Thread.current() == @:privateAccess EntryPoint.mainThread;
+	}
+
 	/**
 		Break out of the event loop by throwing an end-thread exception
 	**/
 	@:noCompletion
+	@:noDebug
 	static public function endMainThread() {
 		haxe.EntryPoint.runInMainThread(() -> {
 			throw new EndThreadException('END-THREAD');
@@ -1286,8 +1324,8 @@ class HaxeEmbed {
 }
 
 private class Internal {
-	// initialized during main thread boot
-	static public var mainThread: sys.thread.Thread = sys.thread.Thread.current();
+	public static var mainThreadWaitLock: Lock;
+	public static var mainThreadKeepAlive: Bool = true;
 }
 
 #end
