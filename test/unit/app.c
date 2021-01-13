@@ -119,15 +119,22 @@ int main(void) {
 	// try loads of calls to haxe
 	int64_t callCount = 1000 * 1000;
 	logf("Trying %" PRId64 " calls into the haxe main thread to measure synchronization and memory costs ...", callCount);
-	HaxeLib_Main_printTime();
-	clock_t start = clock(), dt;
-	for (int64_t i = 0; i < callCount; i++) {
-		HaxeLib_noArgsNoReturn();
+	{
+		struct timespec start;
+		struct timespec end;
+		HaxeLib_Main_printTime();
+		clock_gettime(CLOCK_REALTIME, &start);
+		for (int64_t i = 0; i < callCount; i++) {
+			HaxeLib_noArgsNoReturn();
+		}
+		clock_gettime(CLOCK_REALTIME, &end);
+		HaxeLib_Main_printTime();
+		double dt_ns = (double)(end.tv_sec - start.tv_sec) * 1.0e9 + (double)(end.tv_nsec - start.tv_nsec);
+		int dt_ms = dt_ns / 1e6;
+		logf("-> total time: %d (ms)", dt_ms);
+		logf("-> per call: %f (ms)", (double) dt_ms / (callCount));
 	}
-	dt = clock() - start;
-	int dt_ms = dt * 1000 / CLOCKS_PER_SEC;
-	logf("-> total time: %d (ms)", dt_ms);
-	logf("-> per call: %f (ms)", (double) dt_ms / (callCount));
+
 
 	logf("GC Memory: %d", HaxeLib_Main_hxcppGcMemUsage());
 
@@ -156,7 +163,7 @@ int main(void) {
 	result = HaxeLib_initializeHaxeThread(onHaxeException);
 	assert(result != NULL);
 	if (result != NULL) {
-		logf("Failed to initialize haxe: %s", result);
+		logf("Expect no initializing twice error: \"%s\"", result);
 	}
 	log("Stopping haxe thread");
 	HaxeLib_stopHaxeThread();
