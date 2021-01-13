@@ -137,36 +137,34 @@ const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptio
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
 int HaxeLib_stopHaxeThread() {
-	// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on HaxeCBridgeInternal::threadEndSemaphore
-	// the idea here is only one stopHaxeThread can running at a time, if stop has already been called, subsequent stops will return immediately
 	int stopped = 0;
-	if (HaxeCBridgeInternal::threadManageMutex.TryLock()) {
+
+	hx::NativeAttach autoAttach;
+	Dynamic currentInfo = __hxcpp_thread_current();
+	bool isHaxeMainThread = HaxeCBridgeInternal::mainThreadRef.mPtr == currentInfo.mPtr;
+	if (isHaxeMainThread) {
+		// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on HaxeCBridgeInternal::threadEndSemaphore
+		// so it is important the haxe thread does not wait on certain locks
+		HaxeCBridge::disableMainThreadKeepAlive();
+		stopped = 1;
+	} else {
+		AutoLock lock(HaxeCBridgeInternal::threadManageMutex);
 		if (HaxeCBridgeInternal::threadRunning) {
-						
-			hx::NativeAttach autoAttach;
-			Dynamic currentInfo = __hxcpp_thread_current();
-			bool isMain = HaxeCBridgeInternal::mainThreadRef.mPtr == currentInfo.mPtr;
+			struct Callback {
+				static void run(void* data) {
+					HaxeCBridge::disableMainThreadKeepAlive();
+				}
+			};
 
-			if (isMain) {
-				HaxeCBridge::stopMainThread();
-			} else {
-				struct Callback {
-					static void run(void* data) {
-						HaxeCBridge::stopMainThread();
-					}
-				};
+			HaxeCBridgeInternal::runInMainThread(Callback::run, nullptr);
 
-				HaxeCBridgeInternal::runInMainThread(Callback::run, nullptr);
-
-				__hxcpp_enter_gc_free_zone();
-				HaxeCBridgeInternal::threadEndSemaphore.Wait();
-				__hxcpp_exit_gc_free_zone();
-			}
-
+			__hxcpp_enter_gc_free_zone();
+			HaxeCBridgeInternal::threadEndSemaphore.Wait();
+			__hxcpp_exit_gc_free_zone();
 			stopped = 1;
 		}
-		HaxeCBridgeInternal::threadManageMutex.Unlock();
 	}
+
 	return stopped;
 }
 

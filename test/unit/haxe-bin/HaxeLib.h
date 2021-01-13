@@ -54,7 +54,7 @@ extern "C" {
 	 * 
 	 * No more calls to main-thread haxe functions can be made (as these will hang waiting for a response from the main thread)
 	 *
-	 * If the haxe thread is active it will blocks until the haxe thread has finished (unless executed on the haxe main thread)
+	 * It will block until the haxe thread has finished (unless executed on the haxe main thread)
 	 * 
 	 * Thread-safety: May be called on a different thread to `HaxeLib_startHaxeThread`
 	 * @returns `1` if thread was stopped synchronously or `0` otherwise – this might be because the haxe thread was not running or another thread has already called `stopHaxeThread()`

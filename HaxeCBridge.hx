@@ -252,7 +252,7 @@ class HaxeCBridge {
 				 * 
 				 * No more calls to main-thread haxe functions can be made (as these will hang waiting for a response from the main thread)
 				 *
-				 * If the haxe thread is active it will blocks until the haxe thread has finished (unless executed on the haxe main thread)
+				 * It will block until the haxe thread has finished (unless executed on the haxe main thread)
 				 * 
 				 * Thread-safety: May be called on a different thread to `${namespace}_startHaxeThread`
 				 * @returns `1` if thread was stopped synchronously or `0` otherwise – this might be because the haxe thread was not running or another thread has already called `stopHaxeThread()`
@@ -412,36 +412,34 @@ class HaxeCBridge {
 
 			HXCPP_EXTERN_CLASS_ATTRIBUTES
 			int ${namespace}_stopHaxeThread() {
-				// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on HaxeCBridgeInternal::threadEndSemaphore
-				// the idea here is only one stopHaxeThread can running at a time, if stop has already been called, subsequent stops will return immediately
 				int stopped = 0;
-				if (HaxeCBridgeInternal::threadManageMutex.TryLock()) {
+
+				hx::NativeAttach autoAttach;
+				Dynamic currentInfo = __hxcpp_thread_current();
+				bool isHaxeMainThread = HaxeCBridgeInternal::mainThreadRef.mPtr == currentInfo.mPtr;
+				if (isHaxeMainThread) {
+					// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on HaxeCBridgeInternal::threadEndSemaphore
+					// so it is important the haxe thread does not wait on certain locks
+					HaxeCBridge::disableMainThreadKeepAlive();
+					stopped = 1;
+				} else {
+					AutoLock lock(HaxeCBridgeInternal::threadManageMutex);
 					if (HaxeCBridgeInternal::threadRunning) {
-						
-						hx::NativeAttach autoAttach;
-						Dynamic currentInfo = __hxcpp_thread_current();
-						bool isMain = HaxeCBridgeInternal::mainThreadRef.mPtr == currentInfo.mPtr;
+						struct Callback {
+							static void run(void* data) {
+								HaxeCBridge::disableMainThreadKeepAlive();
+							}
+						};
 
-						if (isMain) {
-							HaxeCBridge::stopMainThread();
-						} else {
-							struct Callback {
-								static void run(void* data) {
-									HaxeCBridge::stopMainThread();
-								}
-							};
+						HaxeCBridgeInternal::runInMainThread(Callback::run, nullptr);
 
-							HaxeCBridgeInternal::runInMainThread(Callback::run, nullptr);
-
-							__hxcpp_enter_gc_free_zone();
-							HaxeCBridgeInternal::threadEndSemaphore.Wait();
-							__hxcpp_exit_gc_free_zone();
-						}
-
+						__hxcpp_enter_gc_free_zone();
+						HaxeCBridgeInternal::threadEndSemaphore.Wait();
+						__hxcpp_exit_gc_free_zone();
 						stopped = 1;
 					}
-					HaxeCBridgeInternal::threadManageMutex.Unlock();
 				}
+
 				return stopped;
 			}
 
@@ -1337,7 +1335,7 @@ class HaxeCBridge {
 		Not thread-safe, must be called in the haxe main thread
 	**/
 	@:noDebug
-	static public function stopMainThread() {
+	static public function disableMainThreadKeepAlive() {
 		Internal.mainThreadKeepAlive = false;
 		wakeMainThread();
 	}
