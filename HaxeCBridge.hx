@@ -347,9 +347,9 @@ class HaxeCBridge {
 				threadInitSemaphore.Set();
 
 				if (staticsInitialized) { // initialized without error
-
+					// blocks running the event loop
+					// keeps alive until manual stop is called
 					HaxeCBridge::mainThreadRun(HaxeCBridgeInternal::processNativeCalls, haxeExceptionCallback);
-
 				}
 
 				threadRunning = false;
@@ -547,12 +547,12 @@ class HaxeCBridge {
 	/**
 		We determine a project name to be the `--main` startup class or the first specified class-path
 
-		The user can override this with `-D haxe-embed-name=ExampleName`
+		The user can override this with `-D cbridge-name=ExampleName`
 
 		This isn't rigorously defined but hopefully will produced nicely namespaced and unsurprising function names
 	**/
 	static function getLibNameFromHaxeArgs(): Null<String> {
-		var overrideName = Context.definedValue('haxe-embed-name');
+		var overrideName = Context.definedValue('cbridge-name');
 		if (overrideName != null && overrideName != '') {
 			return safeIdent(overrideName);
 		}
