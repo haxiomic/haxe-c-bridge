@@ -1,3 +1,7 @@
+#if (haxe_ver < 4.2)
+#error "Haxe 4.2 required (4.1 support coming soon)"
+#end
+
 #if macro
 
 	// fast path for when code gen isn't required
