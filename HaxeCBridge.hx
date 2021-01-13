@@ -524,7 +524,9 @@ class HaxeCBridge {
 							}
 						};
 
+						#ifdef HXCPP_DEBUG
 						assert(threadRunning && "haxe thread not running, use ${namespace}_initializeHaxeThread() to activate the haxe thread");
+						#endif
 
 						$fnDataTypeName $fnDataName = { {${signature.args.map(a->a.name).join(', ')}} };
 
