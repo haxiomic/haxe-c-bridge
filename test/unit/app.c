@@ -21,12 +21,6 @@ void onHaxeException(const char* info) {
 	log("-> thread stopped");
 }
 
-// we pass this to our haxe program via setMessageSync to test calling into native code from haxe
-// it will be called on the haxe thread
-void nativeCallback(int number) {
-	logf("native callback %d", number);
-}
-
 void assertCallback(bool v) {
 	assert(v);
 }
