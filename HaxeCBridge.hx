@@ -238,7 +238,7 @@ class HaxeCBridge {
 				 * 
 				 * This must be first before calling haxe functions (otherwise those calls will hang waiting for a response from the haxe thread)
 				 * 
-				 * @param unhandledExceptionCallback a callback to execute if an unhandled exception occurs on the haxe thread. The haxe thread will continue processing events after an unhandled exception. Use `NULL` for no callback
+				 * @param unhandledExceptionCallback a callback to execute if an unhandled exception occurs on the haxe thread. The haxe thread will continue processing events after an unhandled exception and you may want to stop it after receiving this callback. Use `NULL` for no callback
 				 * @returns `NULL` if the thread initializes successfully or a null terminated C string if an error occurs during initialization
 				 */
 				const char* ${namespace}_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
@@ -251,7 +251,7 @@ class HaxeCBridge {
 				 * If the haxe thread is active it will blocks until the haxe thread has finished (unless executed on the haxe main thread)
 				 * 
 				 * Thread-safety: May be called on a different thread to `${namespace}_startHaxeThread`
-				 * @returns `true` if thread was stopped synchronously or `false` otherwise – this might be because the haxe thread was not running or another thread has already called `stopHaxeThread()`
+				 * @returns `1` if thread was stopped synchronously or `0` otherwise – this might be because the haxe thread was not running or another thread has already called `stopHaxeThread()`
 				 */
 				int ${namespace}_stopHaxeThread();
 
