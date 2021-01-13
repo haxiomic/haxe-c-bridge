@@ -1,3 +1,6 @@
+#include "haxe-bin/MessagePayload.h"
+#include "haxe-bin/HaxeLib.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,9 +8,7 @@
 #include <assert.h>
 #include <time.h>
 #include <inttypes.h>
-
-#include "haxe-bin/MessagePayload.h"
-#include "haxe-bin/HaxeLib.h"
+#include <stdbool.h>
 
 #define log(str) printf("%s:%d: " str "\n", __FILE__, __LINE__)
 #define logf(fmt, ...) printf("%s:%d: " fmt "\n", __FILE__, __LINE__, __VA_ARGS__)
@@ -113,10 +114,10 @@ int main(void) {
 	log("sleeping 1s to let the haxe thread event loop run");
 	sleep(1);
 	logf("-> HaxeLib_Main_getLoopCount() => %d", HaxeLib_Main_getLoopCount());
-	assert(HaxeLib_Main_getLoopCount() > 10);
+	assert(HaxeLib_Main_getLoopCount() > 2);
 
 	// try loads of calls to haxe
-	int64_t callCount = 1000 * 1000 * 1000;
+	int64_t callCount = 1000 * 1000;
 	logf("Trying %" PRId64 " calls into the haxe main thread to measure synchronization and memory costs ...", callCount);
 	HaxeLib_Main_printTime();
 	clock_t start = clock(), dt;

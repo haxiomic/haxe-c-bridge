@@ -1,3 +1,5 @@
+import sys.thread.EventLoop;
+import sys.thread.Thread;
 import cpp.vm.Gc;
 import cpp.Native;
 import cpp.Callable;
@@ -17,7 +19,7 @@ import cpp.Star;
 	<flag value="-fsanitize=address" />
 </linker>
 ')
-@:build(HaxeEmbed.build())
+@:build(HaxeCBridge.build())
 class Main {
 
 	static var staticLoopCount: Int;
@@ -26,12 +28,12 @@ class Main {
 		trace('main(): Hello from haxe ${Macro.getHaxeVersion()} and hxcp ${Macro.getHxcppVersion()}');
 		pack.ExampleClass; // make sure example class is referenced so the c api is generated
 
-		var i = 0;
-		function loop() {
-			staticLoopCount++;
-			haxe.Timer.delay(loop, 0);
-		}
-		loop();
+		// function loop() {
+		// 	// trace('loop $staticLoopCount');
+		// 	staticLoopCount++;
+		// 	haxe.Timer.delay(loop, 100);
+		// }
+		// loop();
 	}
 
 	static public function getLoopCount(): Int {
@@ -88,7 +90,7 @@ enum RegularEnum {
 	B;
 }
 
-@:build(HaxeEmbed.build(''))
+@:build(HaxeCBridge.build(''))
 @:native('test.HxPublicApi')
 class PublicCApi {
 	/**
@@ -103,7 +105,7 @@ class PublicCApi {
 
 	/** when called externally from C this function will be executed synchronously on the main thread **/
 	static public function callInMainThread(f64: cpp.Float64): Bool {
-		return HaxeEmbed.isMainThread();
+		return HaxeCBridge.isMainThread();
 	}
 
 	/**
@@ -112,7 +114,7 @@ class PublicCApi {
 	**/
 	@externalThread
 	static public function callInExternalThread(f64: cpp.Float64): Bool {
-		return !HaxeEmbed.isMainThread();
+		return !HaxeCBridge.isMainThread();
 	}
 
 	static public function add(a: Int, b: Int): Int return a + b;

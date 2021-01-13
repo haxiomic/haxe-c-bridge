@@ -1,7 +1,11 @@
 package pack;
 
-@:build(HaxeEmbed.build())
+@:build(HaxeCBridge.build())
 class ExampleClass {
+
+	static function main() {
+		trace('alternative main!');
+	}
 
 	static public function example(): Int {
 		return 1;
@@ -9,7 +13,7 @@ class ExampleClass {
 
 }
 
-@:build(HaxeEmbed.build())
+@:build(HaxeCBridge.build())
 @:nativeGen // test nativeGen doesn't interfere with c-api macro
 private class ExampleClassPrivate {
 

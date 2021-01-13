@@ -4,6 +4,7 @@
 --library hxcpp:git:https://github.com/HaxeFoundation/hxcpp#69d402ea994ad54bba9267e0a01e0a70d4e25fb2
 
 --main Main
+# Main
 
 # generate C++ output
 --cpp haxe-bin
@@ -14,6 +15,6 @@
 -D dll_link
 
 # name the output header
--D haxe-embed-name=HaxeLib
+-D cbridge-name=HaxeLib
 
 --debug
