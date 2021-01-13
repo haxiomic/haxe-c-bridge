@@ -6,6 +6,7 @@
 #include <hx/Native.h>
 #include <hx/Thread.h>
 #include <hx/StdLibs.h>
+#include <hx/GC.h>
 #include <HaxeCBridge.h>
 #include <assert.h>
 #include <queue>
@@ -19,7 +20,7 @@
 #include <pack/_ExampleClass/ExampleClassPrivate.h>
 #include <pack/ExampleClass.h>
 
-namespace {
+namespace HaxeCBridgeInternal {
 	std::atomic<bool> threadStarted = { false };
 	std::atomic<bool> threadRunning = { false };
 	// once haxe statics are initialized we cannot clear them for a clean restart
@@ -33,13 +34,12 @@ namespace {
 	HxSemaphore threadInitSemaphore;
 	HxSemaphore threadEndSemaphore;
 	HxMutex threadManageMutex;
+	Dynamic mainThreadRef;
 
 	void defaultExceptionHandler(const char* info) {
 		printf("Unhandled haxe exception: %s\n", info);
 	}
-}
 
-namespace HaxeCBridgeInternal {
 	typedef void (* MainThreadCallback)(void* data);
 	HxMutex queueMutex;
 	std::queue<std::pair<MainThreadCallback, void*>> queue;
@@ -64,58 +64,60 @@ namespace HaxeCBridgeInternal {
 
 THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 	HX_TOP_OF_STACK
-	threadRunning = true;
+	HaxeCBridgeInternal::HaxeThreadData* threadData = (HaxeCBridgeInternal::HaxeThreadData*) data;
+	HaxeCBridgeInternal::mainThreadRef = __hxcpp_thread_current();
 
-	HaxeThreadData* threadData = (HaxeThreadData*) data;
+	HaxeCBridgeInternal::threadRunning = true; // must come after mainThreadRef assignment
+
 	threadData->initExceptionInfo = nullptr;
 
 	// copy out callback
 	HaxeExceptionCallback haxeExceptionCallback = threadData->haxeExceptionCallback;
 
-	bool firstRun = !staticsInitialized;
+	bool firstRun = !HaxeCBridgeInternal::staticsInitialized;
 
 	// See hx::Init in StdLibs.cpp for reference
-	if (!staticsInitialized) try {
+	if (!HaxeCBridgeInternal::staticsInitialized) try {
 		::hx::Boot();
 		__boot_all();
-		staticsInitialized = true;
+		HaxeCBridgeInternal::staticsInitialized = true;
 	} catch(Dynamic initException) {
 		// hxcpp init failure or uncaught haxe runtime exception
 		threadData->initExceptionInfo = initException->toString().utf8_str();
 	}
 
-	threadInitSemaphore.Set();
+	HaxeCBridgeInternal::threadInitSemaphore.Set();
 
-	if (staticsInitialized) { // initialized without error
+	if (HaxeCBridgeInternal::staticsInitialized) { // initialized without error
 		// blocks running the event loop
 		// keeps alive until manual stop is called
 		HaxeCBridge::mainThreadRun(HaxeCBridgeInternal::processNativeCalls, haxeExceptionCallback);
 	}
 
-	threadRunning = false;
-	threadEndSemaphore.Set();
+	HaxeCBridgeInternal::threadRunning = false;
+	HaxeCBridgeInternal::threadEndSemaphore.Set();
 
 	THREAD_FUNC_RET
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
 const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
-	HaxeThreadData threadData = {
-		.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? defaultExceptionHandler : unhandledExceptionCallback,
+	HaxeCBridgeInternal::HaxeThreadData threadData = {
+		.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? HaxeCBridgeInternal::defaultExceptionHandler : unhandledExceptionCallback,
 		.initExceptionInfo = nullptr,
 	};
 
 	{
 		// mutex prevents two threads calling this function from being able to start two haxe threads
-		AutoLock lock(threadManageMutex);
-		if (!threadStarted) {
+		AutoLock lock(HaxeCBridgeInternal::threadManageMutex);
+		if (!HaxeCBridgeInternal::threadStarted) {
 			// startup the haxe main thread
 			HxCreateDetachedThread(haxeMainThreadFunc, &threadData);
 
-			threadStarted = true;
+			HaxeCBridgeInternal::threadStarted = true;
 
 			// wait until the thread is initialized and ready
-			threadInitSemaphore.Wait();
+			HaxeCBridgeInternal::threadInitSemaphore.Wait();
 		} else {
 			threadData.initExceptionInfo = "haxe thread cannot be started twice";
 		}
@@ -135,20 +137,35 @@ const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptio
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
 int HaxeLib_stopHaxeThread() {
-	// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on threadEndSemaphore
+	// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on HaxeCBridgeInternal::threadEndSemaphore
 	// the idea here is only one stopHaxeThread can running at a time, if stop has already been called, subsequent stops will return immediately
 	int stopped = 0;
-	if (threadManageMutex.TryLock()) {
-		if (threadRunning) {
+	if (HaxeCBridgeInternal::threadManageMutex.TryLock()) {
+		if (HaxeCBridgeInternal::threadRunning) {
+						
 			hx::NativeAttach autoAttach;
-			bool isMain = HaxeCBridge::isMainThread();
-			HaxeCBridge::endMainThread();
-			if (!isMain) {
-				threadEndSemaphore.Wait();
+			Dynamic currentInfo = __hxcpp_thread_current();
+			bool isMain = HaxeCBridgeInternal::mainThreadRef.mPtr == currentInfo.mPtr;
+
+			if (isMain) {
+				HaxeCBridge::stopMainThread();
+			} else {
+				struct Callback {
+					static void run(void* data) {
+						HaxeCBridge::stopMainThread();
+					}
+				};
+
+				HaxeCBridgeInternal::runInMainThread(Callback::run, nullptr);
+
+				__hxcpp_enter_gc_free_zone();
+				HaxeCBridgeInternal::threadEndSemaphore.Wait();
+				__hxcpp_exit_gc_free_zone();
 			}
+
 			stopped = 1;
 		}
-		threadManageMutex.Unlock();
+		HaxeCBridgeInternal::threadManageMutex.Unlock();
 	}
 	return stopped;
 }
@@ -175,7 +192,7 @@ int HaxeLib_Main_getLoopCount() {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {} };
@@ -209,7 +226,7 @@ int HaxeLib_Main_hxcppGcMemUsage() {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {} };
@@ -248,7 +265,7 @@ void HaxeLib_Main_hxcppGcRun(bool a0) {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0} };
@@ -280,7 +297,7 @@ void HaxeLib_Main_printTime() {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {} };
@@ -312,7 +329,7 @@ void HaxeLib_voidRtn(int a0, const char* a1, HaxeLib_NonTrivialAlias a2, HaxeLib
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0, a1, a2, a3} };
@@ -344,7 +361,7 @@ void HaxeLib_noArgsNoReturn() {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {} };
@@ -377,7 +394,7 @@ bool HaxeLib_callInMainThread(double a0) {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0} };
@@ -417,7 +434,7 @@ int HaxeLib_add(int a0, int a1) {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0, a1} };
@@ -451,7 +468,7 @@ int* HaxeLib_starPointers(void* a0, HaxeLib_CppVoidX* a1, HaxeLib_CppVoidX* a2, 
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0, a1, a2, a3, a4, a5, a6} };
@@ -485,7 +502,7 @@ void* HaxeLib_rawPointers(void* a0, int64_t* a1, const void* a2) {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0, a1, a2} };
@@ -519,7 +536,7 @@ int64_t* HaxeLib_hxcppPointers(function_Bool_Void a0, void* a1, int64_t* a2, int
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0, a1, a2, a3, a4} };
@@ -553,7 +570,7 @@ function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void a0, fun
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0, a1, a2, a3, a4, a5, a6} };
@@ -587,7 +604,7 @@ MessagePayload HaxeLib_externStruct(MessagePayload a0, MessagePayload* a1) {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0, a1} };
@@ -620,7 +637,7 @@ void HaxeLib_allocateABunchOfData() {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {} };
@@ -658,7 +675,7 @@ void HaxeLib_optional(float a0) {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0} };
@@ -690,7 +707,7 @@ void HaxeLib_badOptional(float a0, float a1) {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0, a1} };
@@ -723,7 +740,7 @@ enum HaxeLib_IntEnum2 HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract a0, const c
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0, a1, a2} };
@@ -756,7 +773,7 @@ void HaxeLib_cppCoreTypes(size_t a0, char a1, const char* a2) {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0, a1, a2} };
@@ -789,7 +806,7 @@ uint64_t HaxeLib_cppCoreTypes2(int a0, double a1, float a2, signed char a3, shor
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {a0, a1, a2, a3, a4, a5, a6, a7, a8} };
@@ -822,7 +839,7 @@ void HaxeLib_throwException() {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {} };
@@ -855,7 +872,7 @@ int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate() {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {} };
@@ -889,7 +906,7 @@ int HaxeLib_pack_ExampleClass_example() {
 	};
 
 	#ifdef HXCPP_DEBUG
-	assert(threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
 	Data data = { {} };
