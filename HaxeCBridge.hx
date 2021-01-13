@@ -580,7 +580,7 @@ class HaxeCBridge {
 		}
 
 		// default to HaxeLibrary
-		return 'HaxeLibrary';
+		return 'HaxeCBridge';
 	}
 
 	static function getMainFromHaxeArgs(args: Array<String>): Null<String> {
