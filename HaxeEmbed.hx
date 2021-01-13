@@ -279,8 +279,6 @@ class HaxeEmbed {
 		+ implementationHeaders.map(CPrinter.printInclude).join('\n') + '\n'
 		+ code('
 
-			extern "C" void __hxcpp_main();
-
 			namespace {
 				std::atomic<bool> threadStarted = { false };
 				std::atomic<bool> threadRunning = { false };
