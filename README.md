@@ -4,7 +4,7 @@
 
 HaxeCBridge is a `@:build` macro that allows you to call haxe code from C by exposing static functions via an automatically generated C header
 
-A separate thread is used to host the haxe execution and the haxe event loop so events and multi-threaded code. When calling haxe functions from C, the haxe code is executed synchronously on the haxe thread (unless the function is marked with `@externalThread`)
+A separate thread is used to host the haxe execution and the haxe event loop (so events scheduled in haxe will continue running in parallel to the rest of your native app). When calling haxe functions from C the haxe code will be executed synchronously on this haxe thread so it's safe for functions exposed to C to interact with the rest of your haxe code. You can avoid haxe thread synchronization by adding `@externalThread` however this is less safe and you must then perform main thread synchronization yourself
 
 Requires haxe 4.2 and hxcpp
 
