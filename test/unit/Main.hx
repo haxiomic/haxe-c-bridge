@@ -28,12 +28,11 @@ class Main {
 		trace('main(): Hello from haxe ${Macro.getHaxeVersion()} and hxcp ${Macro.getHxcppVersion()}');
 		pack.ExampleClass; // make sure example class is referenced so the c api is generated
 
-		// function loop() {
-		// 	// trace('loop $staticLoopCount');
-		// 	staticLoopCount++;
-		// 	haxe.Timer.delay(loop, 100);
-		// }
-		// loop();
+		function loop() {
+			staticLoopCount++;
+			haxe.Timer.delay(loop, 100);
+		}
+		loop();
 	}
 
 	static public function getLoopCount(): Int {
