@@ -24,6 +24,7 @@ import haxe.macro.ComplexTypeTools;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.ExprTools;
+import haxe.macro.PositionTools;
 import haxe.macro.Printer;
 import haxe.macro.Type;
 import haxe.macro.TypeTools;
@@ -146,10 +147,10 @@ class HaxeCBridge {
 		headersRequiredForImplementation.push({path: Path.join(typeHeaderPath) + '.h', quoted: false});
 
 		// prefix all functions with lib name and class path
+		var classPrefix = cls.pack.concat([namespace == null ? cls.name : namespace]);
 		var functionPrefix =
 				[libName]
-				.concat(cls.pack)
-				.concat([namespace == null ? cls.name : namespace])
+				.concat(safeIdent(classPrefix.join('.')) != libName ? classPrefix : [])
 				.filter(s -> s != '');
 
 		for (f in cls.statics.get()) {
@@ -607,21 +608,6 @@ class HaxeCBridge {
 			return safeIdent(mainClassPath);
 		}
 
-		// if no main is found, use first direct class reference
-		for (i in 0...args.length) {
-			var arg = args[i];
-			if (arg.charAt(0) != '-') {
-				var argBefore = args[i - 1];
-				// is this value preceded by a flag? If not, it's a lone value and therefore a class-path
-				var isLoneValue = if (argBefore != null) {
-					argBefore.charAt(0) != '-';
-				} else true;
-				if (isLoneValue) {
-					return safeIdent(arg);
-				}
-			}
-		}
-
 		// default to HaxeLibrary
 		return 'HaxeCBridge';
 	}
@@ -794,6 +780,7 @@ class CConverterContext {
 	final declaredTypeIdentifiers = new Map<String, Bool>();
 	
 	public final functionDeclarations = new Array<CDeclaration>();
+	final declaredFunctionIdentifiers = new Map<String, Position>();
 	
 	final declarationPrefix: String;
 	final generateTypedef: Bool;
@@ -831,6 +818,7 @@ class CConverterContext {
 				ret: convertComplexType(fun.ret, true, pos)
 			})
 		});
+		declareFunctionIdentifier(name, pos);
 	}
 
 	public function addTypedFunctionDeclaration(name: String, tfunc: TFunc, doc: Null<String>, pos: Position) {
@@ -845,6 +833,20 @@ class CConverterContext {
 				ret: convertType(tfunc.t, true, false, pos)
 			})
 		});
+		declareFunctionIdentifier(name, pos);
+	}
+
+	function declareFunctionIdentifier(name: String, pos: Position) {
+		var existingDecl = declaredFunctionIdentifiers.get(name);
+		if (existingDecl == null) {
+			declaredFunctionIdentifiers.set(name, pos);
+		} else {
+			inline function locString(p: Position) {
+				var l = PositionTools.toLocation(p);
+				return '${l.file}:${l.range.start.line}';
+			}
+			Context.fatalError('HaxeCBridge: function "$name" (${locString(pos)}) generates the same C name as another function (${locString(existingDecl)})', pos);
+		}
 	}
 
 	public function convertComplexType(ct: ComplexType, allowNonTrivial: Bool, pos: Position) {
@@ -1295,12 +1297,12 @@ class CodeTools {
 
 // runtime HaxeCBridge
 
-import cpp.Star;
 import cpp.Callable;
+import cpp.Star;
 import haxe.EntryPoint;
+import sys.thread.Lock;
 import sys.thread.Mutex;
 import sys.thread.Thread;
-import sys.thread.Lock;
 
 @:nativeGen
 @:keep
