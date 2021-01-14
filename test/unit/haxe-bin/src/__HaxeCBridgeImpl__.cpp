@@ -209,7 +209,6 @@ int HaxeLib_Main_getLoopCount() {
 
 	// queue a callback to execute getLoopCount() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -246,7 +245,6 @@ int HaxeLib_Main_hxcppGcMemUsage() {
 
 	// queue a callback to execute hxcppGcMemUsage() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -288,7 +286,6 @@ void HaxeLib_Main_hxcppGcRun(bool a0) {
 
 	// queue a callback to execute hxcppGcRun() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 }
 
@@ -323,7 +320,6 @@ void HaxeLib_Main_printTime() {
 
 	// queue a callback to execute printTime() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 }
 
@@ -358,7 +354,6 @@ void HaxeLib_voidRtn(int a0, const char* a1, HaxeLib_NonTrivialAlias a2, HaxeLib
 
 	// queue a callback to execute voidRtn() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 }
 
@@ -393,7 +388,6 @@ void HaxeLib_noArgsNoReturn() {
 
 	// queue a callback to execute noArgsNoReturn() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 }
 
@@ -429,7 +423,6 @@ bool HaxeLib_callInMainThread(double a0) {
 
 	// queue a callback to execute callInMainThread() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -472,7 +465,6 @@ int HaxeLib_add(int a0, int a1) {
 
 	// queue a callback to execute add() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -509,7 +501,6 @@ int* HaxeLib_starPointers(void* a0, HaxeLib_CppVoidX* a1, HaxeLib_CppVoidX* a2, 
 
 	// queue a callback to execute starPointers() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -546,7 +537,6 @@ void* HaxeLib_rawPointers(void* a0, int64_t* a1, const void* a2) {
 
 	// queue a callback to execute rawPointers() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -583,7 +573,6 @@ int64_t* HaxeLib_hxcppPointers(function_Bool_Void a0, void* a1, int64_t* a2, int
 
 	// queue a callback to execute hxcppPointers() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -620,7 +609,6 @@ function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void a0, fun
 
 	// queue a callback to execute hxcppCallbacks() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -657,7 +645,6 @@ MessagePayload HaxeLib_externStruct(MessagePayload a0, MessagePayload* a1) {
 
 	// queue a callback to execute externStruct() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -693,7 +680,6 @@ void HaxeLib_allocateABunchOfData() {
 
 	// queue a callback to execute allocateABunchOfData() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 }
 
@@ -734,7 +720,6 @@ void HaxeLib_optional(float a0) {
 
 	// queue a callback to execute optional() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 }
 
@@ -769,7 +754,6 @@ void HaxeLib_badOptional(float a0, float a1) {
 
 	// queue a callback to execute badOptional() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 }
 
@@ -805,7 +789,6 @@ enum HaxeLib_IntEnum2 HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract a0, const c
 
 	// queue a callback to execute enumTypes() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -841,7 +824,6 @@ void HaxeLib_cppCoreTypes(size_t a0, char a1, const char* a2) {
 
 	// queue a callback to execute cppCoreTypes() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 }
 
@@ -877,7 +859,6 @@ uint64_t HaxeLib_cppCoreTypes2(int a0, double a1, float a2, signed char a3, shor
 
 	// queue a callback to execute cppCoreTypes2() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -913,7 +894,6 @@ void HaxeLib_throwException() {
 
 	// queue a callback to execute throwException() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 }
 
@@ -949,7 +929,6 @@ int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate() {
 
 	// queue a callback to execute examplePrivate() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
@@ -986,7 +965,6 @@ int HaxeLib_pack_ExampleClass_example() {
 
 	// queue a callback to execute example() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	// wait until execution completes
 	data.lock.Wait();
 	return data.ret;
 }
