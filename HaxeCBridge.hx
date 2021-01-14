@@ -335,6 +335,12 @@ class HaxeCBridge {
 						pair.first(pair.second);
 					}
 				}
+
+				bool isHaxeMainThread() {
+					hx::NativeAttach autoAttach;
+					Dynamic currentInfo = __hxcpp_thread_current();
+					return HaxeCBridgeInternal::mainThreadRef.mPtr == currentInfo.mPtr;
+				}
 			}
 
 			THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
@@ -417,10 +423,7 @@ class HaxeCBridge {
 			int ${namespace}_stopHaxeThread() {
 				int stopped = 0;
 
-				hx::NativeAttach autoAttach;
-				Dynamic currentInfo = __hxcpp_thread_current();
-				bool isHaxeMainThread = HaxeCBridgeInternal::mainThreadRef.mPtr == currentInfo.mPtr;
-				if (isHaxeMainThread) {
+				if (HaxeCBridgeInternal::isHaxeMainThread()) {
 					// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on HaxeCBridgeInternal::threadEndSemaphore
 					// so it is important the haxe thread does not wait on certain locks
 					HaxeCBridge::disableMainThreadKeepAlive();
@@ -436,9 +439,12 @@ class HaxeCBridge {
 
 						HaxeCBridgeInternal::runInMainThread(Callback::run, nullptr);
 
-						__hxcpp_enter_gc_free_zone();
-						HaxeCBridgeInternal::threadEndSemaphore.Wait();
-						__hxcpp_exit_gc_free_zone();
+						{
+							hx::NativeAttach autoAttach;
+							__hxcpp_enter_gc_free_zone();
+							HaxeCBridgeInternal::threadEndSemaphore.Wait();
+							__hxcpp_exit_gc_free_zone();
+						}
 						stopped = 1;
 					}
 				}
@@ -538,7 +544,12 @@ class HaxeCBridge {
 				')
 				+ CPrinter.printDeclaration(d, false) + ' {\n'
 				+ indent(1,
-					CPrinter.printDeclaration(fnDataDeclaration) + ';\n'
+					code('
+						if (HaxeCBridgeInternal::isHaxeMainThread()) {
+							return ${callWithArgs(signature.args.map(a->a.name))};
+						}
+					')
+					+ CPrinter.printDeclaration(fnDataDeclaration) + ';\n'
 					+ code('
 						struct Callback {
 							static void run(void* p) {
@@ -565,7 +576,7 @@ class HaxeCBridge {
 
 						// queue a callback to execute ${haxeFunction.field.name}() on the main thread and wait until execution completes
 						HaxeCBridgeInternal::runInMainThread(Callback::run, &$fnDataName);
-						// wait outside the NativeAttached region to prevent hangs if hxcpp performs a collection
+						// wait until execution completes
 						$fnDataName.lock.Wait();
 					')
 					+ if (hasReturnValue) code('
