@@ -16,9 +16,9 @@
 // called from the haxe main thread
 // the thread will continue running
 void onHaxeException(const char* info) {
-	logf("onHaxeException (manually stopping haxe thread): \"%s\"", info);
-	HaxeLib_stopHaxeThread();
-	log("-> thread stopped");
+	logf("onHaxeException: \"%s\"", info);
+	HaxeLib_stopHaxeThreadIfRunning(true); // (in a real app, you'd want to use `false` here so the thread exits immediately, but here we let it wait for pending events to complete)
+	log("-> thread stop requested (waitOnScheduledEvents = true)");
 }
 
 void assertCallback(bool v) {
@@ -54,8 +54,8 @@ void fnStruct(MessagePayload msg) {
 int main(void) {
 	log("Hello From C");
 	
-	// we can call stop without a haxe thread, but it should return false and do nothing
-	assert(!HaxeLib_stopHaxeThread());
+	// we can call stop without a haxe thread, but it should do nothing
+	HaxeLib_stopHaxeThreadIfRunning(true);
 	
 	log("Starting haxe thread");
 	const char* result = HaxeLib_initializeHaxeThread(onHaxeException);
@@ -147,13 +147,17 @@ int main(void) {
 	logf("GC Memory (after major collection): %d", HaxeLib_Main_hxcppGcMemUsage());
 	logf("GC Memory: %d", HaxeLib_Main_hxcppGcMemUsage());
 
+	// if we don't call this then the infinite haxe.Timer loop will keep the main thread alive
+	// (unless we use `HaxeLib_stopHaxeThreadIfRunning(false)`)
+	HaxeLib_Main_stopLooping();
+
 	// check unhandled exception callback fires
 	log("Testing triggering exception in haxe"); // this is asynchronous
 	HaxeLib_throwException();
 
 	// end the haxe thread (this will block while the haxe thread finishes processing immediate pending events)
-	log("Stopping haxe thread (manually)");
-	HaxeLib_stopHaxeThread();
+	log("Stopping haxe thread and waiting for pending events to complete");
+	HaxeLib_stopHaxeThreadIfRunning(true);
 
 	// trying to reinitialize haxe thread should fail
 	log("Starting haxe thread");
@@ -162,8 +166,8 @@ int main(void) {
 	if (result != NULL) {
 		logf("Expect no initializing twice error: \"%s\"", result);
 	}
-	log("Stopping haxe thread");
-	HaxeLib_stopHaxeThread();
+	log("Testing stopping haxe thread a second time (despite it not currently running)");
+	HaxeLib_stopHaxeThreadIfRunning(true);
 
 	log("All tests completed successfully");
 

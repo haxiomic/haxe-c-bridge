@@ -133,7 +133,7 @@ const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptio
 	}
 				
 	if (threadData.initExceptionInfo != nullptr) {
-		HaxeLib_stopHaxeThread();
+		HaxeLib_stopHaxeThreadIfRunning(false);
 
 		const int returnInfoMax = 1024;
 		static char returnInfo[returnInfoMax] = ""; // statically allocated for return safety
@@ -145,24 +145,22 @@ const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptio
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-int HaxeLib_stopHaxeThread() {
-	int stopped = 0;
-
+void HaxeLib_stopHaxeThreadIfRunning(bool waitOnScheduledEvents) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on HaxeCBridgeInternal::threadEndSemaphore
 		// so it is important the haxe thread does not wait on certain locks
-		HaxeCBridge::disableMainThreadKeepAlive();
-		stopped = 1;
+		HaxeCBridge::endMainThread(waitOnScheduledEvents);
 	} else {
 		AutoLock lock(HaxeCBridgeInternal::threadManageMutex);
 		if (HaxeCBridgeInternal::threadRunning) {
 			struct Callback {
 				static void run(void* data) {
-					HaxeCBridge::disableMainThreadKeepAlive();
+					bool* b = (bool*) data;
+					HaxeCBridge::endMainThread(*b);
 				}
 			};
 
-			HaxeCBridgeInternal::runInMainThread(Callback::run, nullptr);
+			HaxeCBridgeInternal::runInMainThread(Callback::run, &waitOnScheduledEvents);
 
 			{
 				hx::NativeAttach autoAttach;
@@ -170,11 +168,8 @@ int HaxeLib_stopHaxeThread() {
 				HaxeCBridgeInternal::threadEndSemaphore.Wait();
 				__hxcpp_exit_gc_free_zone();
 			}
-			stopped = 1;
 		}
 	}
-
-	return stopped;
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
@@ -679,6 +674,40 @@ void HaxeLib_throwException() {
 	Data data = { {} };
 
 	// queue a callback to execute throwException() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+void HaxeLib_Main_stopLooping() {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return Main_obj::stopLooping();
+	}
+	struct Data {
+		struct {} args;
+		HxSemaphore lock;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				Main_obj::stopLooping();
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {} };
+
+	// queue a callback to execute stopLooping() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
 	data.lock.Wait();
 }

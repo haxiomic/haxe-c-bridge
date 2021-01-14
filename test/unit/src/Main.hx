@@ -1,12 +1,13 @@
-import sys.thread.Thread;
-import cpp.vm.Gc;
-import cpp.Native;
 import cpp.Callable;
 import cpp.ConstCharStar;
 import cpp.ConstStar;
+import cpp.Native;
 import cpp.Pointer;
 import cpp.SizeT;
 import cpp.Star;
+import cpp.vm.Gc;
+import haxe.Timer;
+import sys.thread.Thread;
 
 @:buildXml('
 <files id="haxe">
@@ -22,6 +23,7 @@ import cpp.Star;
 class Main {
 
 	static var staticLoopCount: Int;
+	static var loopTimer: Null<Timer>;
 
 	static function main() {
 		trace('main(): Hello from haxe ${Macro.getHaxeVersion()} and hxcp ${Macro.getHxcppVersion()}');
@@ -29,9 +31,15 @@ class Main {
 
 		function loop() {
 			staticLoopCount++;
-			haxe.Timer.delay(loop, 100);
+			loopTimer = haxe.Timer.delay(loop, 100);
 		}
 		loop();
+	}
+
+	static public function stopLooping() {
+		if (loopTimer != null) {
+			loopTimer.stop();
+		}
 	}
 
 	static public function getLoopCount() {

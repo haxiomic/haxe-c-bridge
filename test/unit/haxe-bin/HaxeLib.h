@@ -40,26 +40,29 @@ extern "C" {
 #endif
 
 	/**
-	 * Initializes a haxe thread that remains alive indefinitely and executes the user's haxe main()
+	 * Initializes a haxe thread that remains alive indefinitely and executes the user's haxe main().
 	 * 
-	 * This must be first before calling haxe functions (otherwise those calls will hang waiting for a response from the haxe thread)
+	 * This must be first before calling haxe functions (otherwise those calls will hang waiting for a response from the haxe thread).
 	 * 
 	 * @param unhandledExceptionCallback a callback to execute if an unhandled exception occurs on the haxe thread. The haxe thread will continue processing events after an unhandled exception and you may want to stop it after receiving this callback. Use `NULL` for no callback
-	 * @returns `NULL` if the thread initializes successfully or a null terminated C string if an error occurs during initialization
+	 * @returns `NULL` if the thread initializes successfully or a null-terminated C string if an error occurs during initialization
 	 */
 	const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
 
 	/**
-	 * Ends the haxe thread after it finishes processing pending events (events scheduled in the future will not be executed). Once ended, it cannot be restarted
-	 * 
-	 * No more calls to main-thread haxe functions can be made (as these will hang waiting for a response from the main thread)
+	 * Stops the haxe thread, blocking until the thread has completed. Once ended, it cannot be restarted (this is because static variable state will be retained from the last run).
 	 *
-	 * It will block until the haxe thread has finished (unless executed on the haxe main thread)
+	 * Other threads spawned from the haxe thread may still be running (you must arrange to stop these yourself for safe app shutdown).
+	 *
+	 * It can be safely called any number of times – if the haxe thread is not running this function will just return.
 	 * 
-	 * Thread-safety: May be called on a different thread to `HaxeLib_startHaxeThread`
-	 * @returns `1` if thread was stopped synchronously or `0` otherwise – this might be because the haxe thread was not running or another thread has already called `stopHaxeThread()`
+	 * After executing no more calls to main-thread haxe functions can be made (as these will hang waiting for a response from the main thread).
+	 * 
+	 * Thread-safety: Can be called safely called on any thread. If called on the haxe thread it will trigger the thread to stop but it cannot then block until stopped.
+	 *
+	 * @param waitOnScheduledEvents If `true`, this function will wait for all events scheduled to execute in the future on the haxe thread to complete – this is the same behavior as running a normal hxcpp program. If `false`, immediate pending events will be finished and the thread stopped without executing events scheduled in the future
 	 */
-	int HaxeLib_stopHaxeThread();
+	void HaxeLib_stopHaxeThreadIfRunning(bool waitOnScheduledEvents);
 
 	/**
 	 * Some doc
@@ -114,6 +117,8 @@ extern "C" {
 	uint64_t HaxeLib_cppCoreTypes2(int i, double f, float s, signed char i8, short i16, int i32, int64_t i64, uint64_t ui64, const char* str);
 
 	void HaxeLib_throwException();
+
+	void HaxeLib_Main_stopLooping();
 
 	int HaxeLib_Main_getLoopCount();
 
