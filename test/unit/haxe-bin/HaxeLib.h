@@ -61,16 +61,6 @@ extern "C" {
 	 */
 	int HaxeLib_stopHaxeThread();
 
-	int HaxeLib_Main_getLoopCount();
-
-	int HaxeLib_Main_hxcppGcMemUsage();
-
-	int HaxeLib_Main_hxcppGcMemUsageExternal();
-
-	void HaxeLib_Main_hxcppGcRun(bool major);
-
-	void HaxeLib_Main_printTime();
-
 	/**
 	 * Some doc
 	 * @param a some integer
@@ -114,10 +104,6 @@ extern "C" {
 	 */
 	void HaxeLib_allocateABunchOfDataExternalThread();
 
-	void HaxeLib_optional(float single);
-
-	void HaxeLib_badOptional(float opt, float notOpt);
-
 	enum HaxeLib_IntEnum2 HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract e, const char* s, HaxeLib_EnumAlias a);
 
 	void HaxeLib_cppCoreTypes(size_t sizet, char char_, const char* constCharStar);
@@ -128,6 +114,16 @@ extern "C" {
 	uint64_t HaxeLib_cppCoreTypes2(int i, double f, float s, signed char i8, short i16, int i32, int64_t i64, uint64_t ui64, const char* str);
 
 	void HaxeLib_throwException();
+
+	int HaxeLib_Main_getLoopCount();
+
+	int HaxeLib_Main_hxcppGcMemUsage();
+
+	int HaxeLib_Main_hxcppGcMemUsageExternal();
+
+	void HaxeLib_Main_hxcppGcRun(bool major);
+
+	void HaxeLib_Main_printTime();
 
 	int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate();
 

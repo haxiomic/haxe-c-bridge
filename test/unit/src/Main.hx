@@ -34,23 +34,23 @@ class Main {
 		loop();
 	}
 
-	static public function getLoopCount(): Int {
+	static public function getLoopCount() {
 		return staticLoopCount;
 	}
 
-	static public function hxcppGcMemUsage(): Int {
+	static public function hxcppGcMemUsage() {
 		return Gc.memUsage();
 	}
 
-	@externalThread static public function hxcppGcMemUsageExternal(): Int {
+	@externalThread static public function hxcppGcMemUsageExternal() {
 		return Gc.memUsage();
 	}
 
-	static public function hxcppGcRun(major: Bool): Void {
+	static public function hxcppGcRun(major: Bool) {
 		Gc.run(major);
 	}
 
-	static public function printTime(): Void {
+	static public function printTime() {
 		trace(Date.now().toString());
 	}
 
@@ -196,10 +196,6 @@ class PublicCApi {
 		var array = [for(i in 0...1000) for (j in 0...1000) ['bunch-of-data']];
 	}
 
-	// optional not supported; all args are required when calling from C
-	static public function optional(?single: Single): Void { }
-	static public function badOptional(?opt: Single, notOpt: Single): Void { }
-
 	static public function enumTypes(e: IntEnumAbstract, s: ConstCharStar, a: EnumAlias): IntEnum2 {
 		return switch e {
 			case A: AAA;
@@ -223,7 +219,10 @@ class PublicCApi {
 	// static public function reference(ref: cpp.Reference<Int>): Void { }
 	// static public function anon(a: {f1: Star<cpp.Void>, ?optF2: Float}): Void { }
 	// static public function array(arrayInt: Array<Int>): Void { }
-	// static public function nullable(f: Null<Float>): Void {}
 	// static public function dyn(dyn: Dynamic): Void {}
+	// static public function nullable(f: Null<Float>): Void {}
+	// static public function typeParam<T>(x: T): T return x;
+	// optional not supported; all args are required when calling from C
+	// static public function optional(?single: Single): Void { }
 
 }

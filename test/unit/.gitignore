@@ -8,4 +8,4 @@ haxe-bin/*
 
 !haxe-bin/src
 haxe-bin/src/*
-!haxe-bin/src/__HaxeCBridgeImpl__.cpp
+!haxe-bin/src/__HaxeCBridgeBindings__.cpp
