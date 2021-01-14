@@ -1,4 +1,3 @@
-import sys.thread.EventLoop;
 import sys.thread.Thread;
 import cpp.vm.Gc;
 import cpp.Native;
@@ -220,7 +219,6 @@ class PublicCApi {
 
 	// the following should be disallowed at compile-time
 	// static public function nonTrivialAlias(a: NonTrivialAlias, b: Star<NonTrivialAlias>): Void { } // fail because `Star<NonTrivialAlias>`
-
 	// static public function haxeCallbacks(voidVoid: () -> Void, intString: (a: Int) -> String): Void { }
 	// static public function reference(ref: cpp.Reference<Int>): Void { }
 	// static public function anon(a: {f1: Star<cpp.Void>, ?optF2: Float}): Void { }

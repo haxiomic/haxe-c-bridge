@@ -1,5 +1,5 @@
-#if (haxe_ver < 4.2)
-#error "Haxe 4.2 required (4.1 support coming soon)"
+#if (haxe_ver < 4.0)
+#error "Haxe 4.0 required"
 #end
 
 #if macro
@@ -576,7 +576,6 @@ class HaxeCBridge {
 
 						// queue a callback to execute ${haxeFunction.field.name}() on the main thread and wait until execution completes
 						HaxeCBridgeInternal::runInMainThread(Callback::run, &$fnDataName);
-						// wait until execution completes
 						$fnDataName.lock.Wait();
 					')
 					+ if (hasReturnValue) code('
@@ -1222,7 +1221,7 @@ class CConverterContext {
 		}
 	}
 
-	static public final cKeywords: ReadOnlyArray<String> = [
+	static public final cKeywords: Array<String> = [
 		"auto", "double", "int", "struct", "break", "else", "long", "switch", "case", "enum", "register", "typedef", "char", "extern", "return", "union", "const", "float", "short", "unsigned", "continue", "for", "signed", "void", "default", "goto", "sizeof", "volatile", "do", "if", "static", "while",
 		"size_t", "int64_t", "uint64_t"
 	];
@@ -1287,7 +1286,6 @@ class CodeTools {
 import cpp.Star;
 import cpp.Callable;
 import haxe.EntryPoint;
-import sys.thread.EventLoop;
 import sys.thread.Mutex;
 import sys.thread.Thread;
 import sys.thread.Lock;
@@ -1297,9 +1295,7 @@ import sys.thread.Lock;
 @:noCompletion
 class HaxeCBridge {
 
-	@:noCompletion
-	static macro function runUserMain() { /* implementation provided above in macro version of HaxeCBridge */ }
-
+	#if (haxe_ver >= 4.2)
 	@:noCompletion
 	static public function mainThreadInit() @:privateAccess {
 		// replaces __hxcpp_main() in __main__.cpp
@@ -1324,12 +1320,13 @@ class HaxeCBridge {
 				// execute any queued native callbacks
 				processNativeCalls();
 
+				// copied from EventLoop.loop()
 				switch eventLoop.customProgress(Sys.time(), events).nextEventAt {
 					case -1:
-						eventLoop.waitLock.wait();
+						Internal.mainThreadWaitLock.wait();
 					case time:
 						var timeout = time - Sys.time();
-						eventLoop.waitLock.wait(Math.max(0, timeout));
+						Internal.mainThreadWaitLock.wait(Math.max(0, timeout));
 				}
 
 			} catch (e: Any) {
@@ -1340,7 +1337,40 @@ class HaxeCBridge {
 		// run a major collection when the thread ends
 		cpp.vm.Gc.run(true);
 	}
+	#else
+	@:noCompletion
+	static public function mainThreadInit() @:privateAccess {
+		Internal.mainThread = Thread.current();
+		Internal.mainThreadWaitLock = EntryPoint.sleepLock;
+	}
 
+	@:noCompletion
+	static public function mainThreadRun(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
+		runUserMain();
+
+		while (Internal.mainThreadKeepAlive) {
+			try {
+				// execute any queued native callbacks
+				processNativeCalls();
+
+				// copied from EntryPoint.run()
+				var nextTick = EntryPoint.processEvents();
+				if (nextTick < 0)
+					Internal.mainThreadWaitLock.wait();
+				if (nextTick > 0)
+					Internal.mainThreadWaitLock.wait(nextTick); // wait until nextTick or wakeup() call
+
+			} catch (e: Any) {
+				onUnhandledException(Std.string(e));
+			}
+		}
+
+		// run a major collection when the thread ends
+		cpp.vm.Gc.run(true);
+	}
+	#end
+
+	@:noCompletion
 	static public inline function isMainThread(): Bool {
 		return inline Thread.current() == Internal.mainThread;
 	}
@@ -1348,16 +1378,21 @@ class HaxeCBridge {
 	/**
 		Not thread-safe, must be called in the haxe main thread
 	**/
+	@:noCompletion
 	static public function disableMainThreadKeepAlive() {
 		Internal.mainThreadKeepAlive = false;
-		wakeMainThread();
+		inline wakeMainThread();
 	}
 
 	// called from _unattached_ external thread, must not allocate in hxcpp
 	@:noDebug
+	@:noCompletion
 	static public function wakeMainThread() {
 		inline Internal.mainThreadWaitLock.release();
 	}
+
+	@:noCompletion
+	static macro function runUserMain() { /* implementation provided above in macro version of HaxeCBridge */ }
 
 }
 
@@ -1367,9 +1402,10 @@ private class Internal {
 	public static var mainThreadKeepAlive: Bool = true;
 }
 
+#if (haxe_ver >= 4.2)
 @:forward
 @:access(sys.thread.EventLoop)
-abstract CustomEventLoop(EventLoop) from EventLoop {
+abstract CustomEventLoop(sys.thread.EventLoop) from sys.thread.EventLoop {
 
 	// same as __progress but it doesn't reset the wait lock
 	// this is because resetting the wait lock here can mean wake-up lock releases are missed
@@ -1435,5 +1471,6 @@ abstract CustomEventLoop(EventLoop) from EventLoop {
 	}
 
 }
+#end
 
 #end
