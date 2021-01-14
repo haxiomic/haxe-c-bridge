@@ -204,6 +204,8 @@ class HaxeCBridge {
 	}
 
 	static function generateHeader(ctx: CConverterContext, namespace: String) {
+		ctx.requireHeader('stdbool.h', false); // we use bool for _stopHaxeThread()
+
 		var includes = ctx.includes.copy();
 		// sort includes, by <, " and alphabetically
 		includes.sort((a, b) -> {
@@ -239,26 +241,29 @@ class HaxeCBridge {
 			#endif
 
 				/**
-				 * Initializes a haxe thread that remains alive indefinitely and executes the user\'s haxe main()
+				 * Initializes a haxe thread that remains alive indefinitely and executes the user\'s haxe main().
 				 * 
-				 * This must be first before calling haxe functions (otherwise those calls will hang waiting for a response from the haxe thread)
+				 * This must be first before calling haxe functions (otherwise those calls will hang waiting for a response from the haxe thread).
 				 * 
 				 * @param unhandledExceptionCallback a callback to execute if an unhandled exception occurs on the haxe thread. The haxe thread will continue processing events after an unhandled exception and you may want to stop it after receiving this callback. Use `NULL` for no callback
-				 * @returns `NULL` if the thread initializes successfully or a null terminated C string if an error occurs during initialization
+				 * @returns `NULL` if the thread initializes successfully or a null-terminated C string if an error occurs during initialization
 				 */
 				const char* ${namespace}_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
 
 				/**
-				 * Ends the haxe thread after it finishes processing pending events (events scheduled in the future will not be executed). Once ended, it cannot be restarted
-				 * 
-				 * No more calls to main-thread haxe functions can be made (as these will hang waiting for a response from the main thread)
+				 * Stops the haxe thread, blocking until the thread has completed. Once ended, it cannot be restarted (this is because static variable state will be retained from the last run).
 				 *
-				 * It will block until the haxe thread has finished (unless executed on the haxe main thread)
+				 * Other threads spawned from the haxe thread may still be running (you must arrange to stop these yourself for safe app shutdown).
+				 *
+				 * It can be safely called any number of times – if the haxe thread is not running this function will just return.
 				 * 
-				 * Thread-safety: May be called on a different thread to `${namespace}_startHaxeThread`
-				 * @returns `1` if thread was stopped synchronously or `0` otherwise – this might be because the haxe thread was not running or another thread has already called `stopHaxeThread()`
+				 * After executing no more calls to main-thread haxe functions can be made (as these will hang waiting for a response from the main thread).
+				 * 
+				 * Thread-safety: Can be called safely called on any thread. If called on the haxe thread it will trigger the thread to stop but it cannot then block until stopped.
+				 *
+				 * @param waitOnScheduledEvents If `true`, this function will wait for all events scheduled to execute in the future on the haxe thread to complete – this is the same behavior as running a normal hxcpp program. If `false`, immediate pending events will be finished and the thread stopped without executing events scheduled in the future
 				 */
-				int ${namespace}_stopHaxeThread();
+				void ${namespace}_stopHaxeThreadIfRunning(bool waitOnScheduledEvents);
 
 		')
 
@@ -409,7 +414,7 @@ class HaxeCBridge {
 				}
 				
 				if (threadData.initExceptionInfo != nullptr) {
-					${namespace}_stopHaxeThread();
+					${namespace}_stopHaxeThreadIfRunning(false);
 
 					const int returnInfoMax = 1024;
 					static char returnInfo[returnInfoMax] = ""; // statically allocated for return safety
@@ -421,24 +426,22 @@ class HaxeCBridge {
 			}
 
 			HXCPP_EXTERN_CLASS_ATTRIBUTES
-			int ${namespace}_stopHaxeThread() {
-				int stopped = 0;
-
+			void ${namespace}_stopHaxeThreadIfRunning(bool waitOnScheduledEvents) {
 				if (HaxeCBridgeInternal::isHaxeMainThread()) {
 					// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on HaxeCBridgeInternal::threadEndSemaphore
 					// so it is important the haxe thread does not wait on certain locks
-					HaxeCBridge::disableMainThreadKeepAlive();
-					stopped = 1;
+					HaxeCBridge::endMainThread(waitOnScheduledEvents);
 				} else {
 					AutoLock lock(HaxeCBridgeInternal::threadManageMutex);
 					if (HaxeCBridgeInternal::threadRunning) {
 						struct Callback {
 							static void run(void* data) {
-								HaxeCBridge::disableMainThreadKeepAlive();
+								bool* b = (bool*) data;
+								HaxeCBridge::endMainThread(*b);
 							}
 						};
 
-						HaxeCBridgeInternal::runInMainThread(Callback::run, nullptr);
+						HaxeCBridgeInternal::runInMainThread(Callback::run, &waitOnScheduledEvents);
 
 						{
 							hx::NativeAttach autoAttach;
@@ -446,11 +449,8 @@ class HaxeCBridge {
 							HaxeCBridgeInternal::threadEndSemaphore.Wait();
 							__hxcpp_exit_gc_free_zone();
 						}
-						stopped = 1;
 					}
 				}
-
-				return stopped;
 			}
 
 		')
@@ -1122,8 +1122,8 @@ class CConverterContext {
 		}
 	}
 
-	function requireHeader(path: String, quoted: Bool = false) {
-		if (!includes.exists(f -> f.path == path)) {
+	public function requireHeader(path: String, quoted: Bool = false) {
+		if (!includes.exists(f -> f.path == path && f.quoted == quoted)) {
 			includes.push({
 				path: path,
 				quoted: quoted
@@ -1329,20 +1329,23 @@ class HaxeCBridge {
 		var eventLoop:CustomEventLoop = Thread.current().events;
 
 		var events = [];
-		while(Internal.mainThreadKeepAlive) {
+		while(Internal.mainThreadLoopActive) {
 			try {
 				// execute any queued native callbacks
 				processNativeCalls();
 
-				// copied from EventLoop.loop()
-				switch eventLoop.customProgress(Sys.time(), events).nextEventAt {
-					case -1:
-						Internal.mainThreadWaitLock.wait();
-					case time:
-						var timeout = time - Sys.time();
-						Internal.mainThreadWaitLock.wait(Math.max(0, timeout));
+				// adapted from EventLoop.loop()
+				var eventTickInfo = eventLoop.customProgress(Sys.time(), events);
+				if (eventTickInfo.nextEventAt < 0) {
+					if (Internal.mainThreadEndIfNoPending && !eventTickInfo.anyTime) {
+						// no events scheduled in the future and not waiting on any promises
+						break;
+					}
+					Internal.mainThreadWaitLock.wait();
+				} else {
+					var timeout = eventTickInfo.nextEventAt - Sys.time();
+					Internal.mainThreadWaitLock.wait(Math.max(0, timeout));
 				}
-
 			} catch (e: Any) {
 				onUnhandledException(Std.string(e));
 			}
@@ -1362,18 +1365,22 @@ class HaxeCBridge {
 	static public function mainThreadRun(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
 		runUserMain();
 
-		while (Internal.mainThreadKeepAlive) {
+		while (Internal.mainThreadLoopActive) {
 			try {
 				// execute any queued native callbacks
 				processNativeCalls();
 
-				// copied from EntryPoint.run()
+				// adapted from EntryPoint.run()
 				var nextTick = EntryPoint.processEvents();
-				if (nextTick < 0)
+				if (nextTick < 0) {
+					if (Internal.mainThreadEndIfNoPending) {
+						// no events scheduled in the future and not waiting on any promises
+						break;
+					}
 					Internal.mainThreadWaitLock.wait();
-				if (nextTick > 0)
+				} else if (nextTick > 0) {
 					Internal.mainThreadWaitLock.wait(nextTick); // wait until nextTick or wakeup() call
-
+				}
 			} catch (e: Any) {
 				onUnhandledException(Std.string(e));
 			}
@@ -1389,16 +1396,15 @@ class HaxeCBridge {
 		return inline Thread.current() == Internal.mainThread;
 	}
 	
-	/**
-		Not thread-safe, must be called in the haxe main thread
-	**/
+	/** not thread-safe, must be called in the haxe main thread **/
 	@:noCompletion
-	static public function disableMainThreadKeepAlive() {
-		Internal.mainThreadKeepAlive = false;
+	static public function endMainThread(waitOnScheduledEvents: Bool) {
+		Internal.mainThreadEndIfNoPending = true;
+		Internal.mainThreadLoopActive = Internal.mainThreadLoopActive && waitOnScheduledEvents;
 		inline wakeMainThread();
 	}
 
-	// called from _unattached_ external thread, must not allocate in hxcpp
+	/** called from _unattached_ external thread, must not allocate in hxcpp **/
 	@:noDebug
 	@:noCompletion
 	static public function wakeMainThread() {
@@ -1413,7 +1419,8 @@ class HaxeCBridge {
 private class Internal {
 	public static var mainThread: Thread;
 	public static var mainThreadWaitLock: Lock;
-	public static var mainThreadKeepAlive: Bool = true;
+	public static var mainThreadLoopActive: Bool = true;
+	public static var mainThreadEndIfNoPending: Bool = false;
 }
 
 #if (haxe_ver >= 4.2)
