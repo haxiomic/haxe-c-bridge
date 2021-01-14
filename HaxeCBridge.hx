@@ -4,7 +4,7 @@
 
 	// fast path for when code gen isn't required
 	// disable this to get auto-complete when editing this file
-	#if (display || display_details || target.name != cpp)
+	#if false &&  (display || display_details || target.name != cpp)
 
 class HaxeCBridge {
 	public static function build(?namespace: String)
@@ -118,6 +118,12 @@ class HaxeCBridge {
 					var directory = Path.directory(path);
 					if (!FileSystem.exists(directory)) {
 						FileSystem.createDirectory(directory);
+					}
+					// only save if there's a difference (save C++ compilation by not changing the file if not needed)
+					if (FileSystem.exists(path)) {
+						if (content == sys.io.File.getContent(path)) {
+							return;
+						}
 					}
 					sys.io.File.saveContent(path, content);	
 				}
