@@ -966,7 +966,7 @@ class CConverterContext {
 				convertType(f(), allowNonTrivial, allowBareFnTypes, pos);
 
 			case TDynamic(t):
-				Context.error("Dynamic is not supported when exposing to C", pos);
+				Context.error("Any and Dynamic types are not supported when exposing to C", pos);
 			
 			case TMono(t):
 				Context.error("Explicit type is required when exposing to C", pos);
