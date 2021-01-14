@@ -32,6 +32,7 @@ enum HaxeLib_IntEnumAbstract {
 	A = 0,
 	B = 1
 };
+typedef int64_t HaxeLib_ExampleObjectHandle;
 
 typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
 
@@ -115,6 +116,12 @@ extern "C" {
 	 * single-line doc
 	 */
 	uint64_t HaxeLib_cppCoreTypes2(int i, double f, float s, signed char i8, short i16, int i32, int64_t i64, uint64_t ui64, const char* str);
+
+	HaxeLib_ExampleObjectHandle HaxeLib_createHaxeObject();
+
+	void HaxeLib_testHaxeObject(HaxeLib_ExampleObjectHandle handle);
+
+	bool HaxeLib_destroyHaxeObject(HaxeLib_ExampleObjectHandle handle);
 
 	void HaxeLib_throwException();
 

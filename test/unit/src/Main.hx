@@ -71,6 +71,8 @@ typedef AliasA = cpp.Void;
 typedef FunctionAlias = (ptr: CustomStar<Int>) -> ConstCharStar;
 typedef NonTrivialAlias = String;
 
+typedef ExampleObjectHandle = cpp.Int64;
+
 enum abstract IntEnumAbstract(Int) {
 	var A;
 	var B;
@@ -215,6 +217,27 @@ class PublicCApi {
 	/** single-line doc **/
 	static public function cppCoreTypes2(i: Int, f: Float, s: Single, i8: cpp.Int8, i16: cpp.Int16, i32: cpp.Int32, i64: cpp.Int64, ui64: cpp.UInt64, str: ConstCharStar): cpp.UInt64 {
 		return 1;
+	}
+
+	static var objects = new Map<ExampleObjectHandle, {str: String}>();
+	static var objectHandleCounter: ExampleObjectHandle = 1;
+	static public function createHaxeObject() {
+		var obj = {str: 'still alive'};
+		var objHandle = objectHandleCounter++;
+		objects.set(objHandle, obj);
+		return objHandle;
+	}
+	static public function testHaxeObject(handle: ExampleObjectHandle) {
+		var obj = objects.get(handle);
+		if (obj == null) {
+			throw 'Object not found for handle $handle';
+		}
+		if (obj.str != 'still alive') {
+			throw 'Object str field was wrong';
+		}
+	}
+	static public function destroyHaxeObject(handle: ExampleObjectHandle) {
+		return objects.remove(handle);
 	}
 
 	static public function throwException(): Void {

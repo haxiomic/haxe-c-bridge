@@ -17,6 +17,7 @@
 // the thread will continue running
 void onHaxeException(const char* info) {
 	logf("onHaxeException: \"%s\"", info);
+	assert(strcmp(info, "example exception") == 0);
 	HaxeLib_stopHaxeThreadIfRunning(true); // (in a real app, you'd want to use `false` here so the thread exits immediately, but here we let it wait for pending events to complete)
 	log("-> thread stop requested (waitOnScheduledEvents = true)");
 }
@@ -105,7 +106,16 @@ int main(void) {
 	assert(inputStruct.someFloat == 12.0);
 	assert(retStruct.someFloat == 24.0 * 2);
 
+	// enum
 	assert(HaxeLib_enumTypes(B, "AAA", AAA) == BBB);
+
+	// haxe object
+	HaxeLib_ExampleObjectHandle obj = HaxeLib_createHaxeObject();
+	// run a major GC to make sure obj would be collected if not protected
+	HaxeLib_Main_hxcppGcRun(true);
+	HaxeLib_testHaxeObject(obj);
+	assert(HaxeLib_destroyHaxeObject(obj));
+	assert(!HaxeLib_destroyHaxeObject(obj));
 
 	// sleep one second and verify the haxe thread event loop continued to run
 	log("sleeping 1s to let the haxe thread event loop run");
@@ -131,7 +141,6 @@ int main(void) {
 		logf("-> total time: %d (ms)", dt_ms);
 		logf("-> per call: %f (ms)", (double) dt_ms / (callCount));
 	}
-
 
 	logf("GC Memory: %d", HaxeLib_Main_hxcppGcMemUsage());
 
