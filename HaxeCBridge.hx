@@ -1336,15 +1336,17 @@ class HaxeCBridge {
 
 				// adapted from EventLoop.loop()
 				var eventTickInfo = eventLoop.customProgress(Sys.time(), events);
-				if (eventTickInfo.nextEventAt < 0) {
-					if (Internal.mainThreadEndIfNoPending && !eventTickInfo.anyTime) {
-						// no events scheduled in the future and not waiting on any promises
-						break;
-					}
-					Internal.mainThreadWaitLock.wait();
-				} else {
-					var timeout = eventTickInfo.nextEventAt - Sys.time();
-					Internal.mainThreadWaitLock.wait(Math.max(0, timeout));
+				switch (eventTickInfo.nextEventAt) {
+					case -2: // continue to next loop
+					case -1:
+						if (Internal.mainThreadEndIfNoPending && !eventTickInfo.anyTime) {
+							// no events scheduled in the future and not waiting on any promises
+							break;
+						}
+						Internal.mainThreadWaitLock.wait();
+					case time:
+						var timeout = time - Sys.time();
+						Internal.mainThreadWaitLock.wait(Math.max(0, timeout));
 				}
 			} catch (e: Any) {
 				onUnhandledException(Std.string(e));
@@ -1446,8 +1448,7 @@ abstract CustomEventLoop(sys.thread.EventLoop) from sys.thread.EventLoop {
 			if(current.nextRunTime <= now) {
 				eventsToRun[eventsToRunIdx++] = current.run;
 				current.nextRunTime += current.interval;
-				//@edit: no need to spin again; if sub
-				// nextEventAt = -2;
+				nextEventAt = -2;
 			} else if(nextEventAt == -1 || current.nextRunTime < nextEventAt) {
 				nextEventAt = current.nextRunTime;
 			}
@@ -1484,10 +1485,9 @@ abstract CustomEventLoop(sys.thread.EventLoop) from sys.thread.EventLoop {
 		}
 
 		// Some events were executed. They could add new events to run.
-		// @edit: no need to do this since those events will trigger the waitLock and spin the loop
-		// if(eventsToRunIdx > 0) {
-		// 	nextEventAt = -2;
-		// }
+		if(eventsToRunIdx > 0) {
+			nextEventAt = -2;
+		}
 		return {nextEventAt:nextEventAt, anyTime:hasPromisedEvents}
 	}
 
