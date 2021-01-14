@@ -361,12 +361,15 @@ class HaxeCBridge {
 					threadData->initExceptionInfo = initException->toString().utf8_str();
 				}
 
-				HaxeCBridgeInternal::threadInitSemaphore.Set();
-
 				if (HaxeCBridgeInternal::staticsInitialized) { // initialized without error
 					// blocks running the event loop
 					// keeps alive until manual stop is called
+					HaxeCBridge::mainThreadInit();
+					HaxeCBridgeInternal::threadInitSemaphore.Set();
 					HaxeCBridge::mainThreadRun(HaxeCBridgeInternal::processNativeCalls, haxeExceptionCallback);
+				} else {
+					// failed to initialize statics; unlock init semaphore so _initializeHaxeThread can continue and report the exception 
+					HaxeCBridgeInternal::threadInitSemaphore.Set();
 				}
 
 				HaxeCBridgeInternal::threadRunning = false;
@@ -951,7 +954,7 @@ class CConverterContext {
 
 	/**
 		Convert a key type and expect a result (or fail)
-		A key try is like a core type (and includes :coreType types) but also includes hxcpp's own special types that don't have the :coreType annotation
+		A key type is like a core type (and includes :coreType types) but also includes hxcpp's own special types that don't have the :coreType annotation
 	**/
 	function convertKeyType(type: Type, allowNonTrivial:Bool, allowBareFnTypes: Bool, pos: Position): CType {
 		var keyCType = tryConvertKeyType(type, allowNonTrivial, allowBareFnTypes, pos);
@@ -969,9 +972,6 @@ class CConverterContext {
 		var base = asBaseType(type);
 		return if (base != null) {
 			switch base {
-				// special cases where we have to patch out the hxcpp types because they don't work with Context.resolveType
-				case {t: {pack: [], name: 'CppVoid' }}: Ident('void');
-				case {t: {pack: [], name: 'CppConstPointer' }, params: [tp]}: Pointer(setModifier(convertType(tp, false, allowBareFnTypes, pos), Const));
 
 				/**
 					See `cpp_type_of` in gencpp.ml
@@ -1155,7 +1155,7 @@ class CConverterContext {
 	}
 
 	function getFunctionCType(args: Array<{name: String, opt: Bool, t: Type}>, ret: Type, pos: Position): CType {
-		// optional type parameters are not supported
+		// optional type parameters are not supported and become non-optional
 
 		var ident = 'function_' + args.map(arg -> typeDeclarationIdent(arg.t)).concat([typeDeclarationIdent(ret)]).join('_');
 		var funcPointer: CType = FunctionPointer(
@@ -1290,19 +1290,22 @@ class HaxeCBridge {
 	static macro function runUserMain() { /* implementation provided above in macro version of HaxeCBridge */ }
 
 	@:noCompletion
-	static public function mainThreadRun(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
+	static public function mainThreadInit() @:privateAccess {
 		// replaces __hxcpp_main() in __main__.cpp
 		Thread.initEventLoop();
-		var eventLoop:CustomEventLoop = Thread.current().events;
 
 		Internal.mainThread = Thread.current();
-		Internal.mainThreadWaitLock = eventLoop.waitLock;
+		Internal.mainThreadWaitLock = Thread.current().events.waitLock;
 
 		EntryPoint.init();
+	}
 
+	@:noCompletion
+	static public function mainThreadRun(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
 		runUserMain();
 
 		// run always-alive event loop
+		var eventLoop:CustomEventLoop = Thread.current().events;
 
 		var events = [];
 		while(Internal.mainThreadKeepAlive) {
@@ -1334,7 +1337,6 @@ class HaxeCBridge {
 	/**
 		Not thread-safe, must be called in the haxe main thread
 	**/
-	@:noDebug
 	static public function disableMainThreadKeepAlive() {
 		Internal.mainThreadKeepAlive = false;
 		wakeMainThread();
