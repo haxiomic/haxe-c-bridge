@@ -1,6 +1,6 @@
 # Haxe C Bridge
 
-**WIP – not ready to use – docs coming soon!**
+**WIP – docs and 4.1 support coming soon!**
 
 HaxeCBridge is a `@:build` macro that enables calling haxe code from C by exposing static functions via an automatically generated C header
 
