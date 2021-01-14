@@ -222,8 +222,8 @@ class HaxeCBridge {
 				}
 			 */
 
-			#ifndef ${namespace}_h
-			#define ${namespace}_h
+			#ifndef HaxeCBridge_${namespace}_h
+			#define HaxeCBridge_${namespace}_h
 
 			')
 
@@ -269,7 +269,7 @@ class HaxeCBridge {
 			}
 			#endif
 
-			#endif /* ${namespace}_h */
+			#endif /* HaxeCBridge_${namespace}_h */
 		');
 	}
 
