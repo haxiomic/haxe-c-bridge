@@ -10,7 +10,7 @@ class HaxeCBridge {
 	public static function build(?namespace: String)
 		return haxe.macro.Context.getBuildFields();
 	@:noCompletion
-	static macro function runUserMain()
+	static macro function runUserMainMacro()
 		return macro null;
 }
 
@@ -196,7 +196,7 @@ class HaxeCBridge {
 		}
 	}
 
-	static macro function runUserMain() {
+	static macro function runUserMainMacro() {
 		var mainClassPath = getMainFromHaxeArgs(Sys.args());
 		if (mainClassPath == null) {
 			return macro null;
@@ -247,21 +247,21 @@ class HaxeCBridge {
 			#endif
 
 				/**
-				 * Initializes a haxe thread that remains alive indefinitely and executes the user\'s haxe main().
+				 * Initializes a haxe thread that remains alive indefinitely. The the haxe main() function will be executed only if this is the first time the haxe thread is started.
 				 * 
 				 * This must be first before calling haxe functions (otherwise those calls will hang waiting for a response from the haxe thread).
 				 * 
 				 * @param unhandledExceptionCallback a callback to execute if an unhandled exception occurs on the haxe thread. The haxe thread will continue processing events after an unhandled exception and you may want to stop it after receiving this callback. Use `NULL` for no callback
 				 * @returns `NULL` if the thread initializes successfully or a null-terminated C string if an error occurs during initialization
 				 */
-				const char* ${namespace}_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
+				const char* ${namespace}_startHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
 
 				/**
-				 * Stops the haxe thread, blocking until the thread has completed. Once ended, it cannot be restarted (this is because static variable state will be retained from the last run).
+				 * Stops the haxe thread, blocking until the thread has completed.
 				 *
 				 * Other threads spawned from the haxe thread may still be running (you must arrange to stop these yourself for safe app shutdown).
 				 *
-				 * It can be safely called any number of times – if the haxe thread is not running this function will just return.
+				 * It can be safely called any number of times – if the haxe thread is not running this function will just return immediately.
 				 * 
 				 * After executing no more calls to main-thread haxe functions can be made (as these will hang waiting for a response from the main thread).
 				 * 
@@ -308,7 +308,6 @@ class HaxeCBridge {
 		+ code('
 
 			namespace HaxeCBridgeInternal {
-				std::atomic<bool> threadStarted = { false };
 				std::atomic<bool> threadRunning = { false };
 				// once haxe statics are initialized we cannot clear them for a clean restart
 				std::atomic<bool> staticsInitialized = { false };
@@ -348,6 +347,7 @@ class HaxeCBridge {
 					}
 				}
 
+				// should only be called when the thread is running
 				bool isHaxeMainThread() {
 					hx::NativeAttach autoAttach;
 					Dynamic currentInfo = __hxcpp_thread_current();
@@ -382,11 +382,14 @@ class HaxeCBridge {
 				if (HaxeCBridgeInternal::staticsInitialized) { // initialized without error
 					// blocks running the event loop
 					// keeps alive until manual stop is called
-					HaxeCBridge::mainThreadInit();
+					HaxeCBridge::mainThreadStart();
 					HaxeCBridgeInternal::threadInitSemaphore.Set();
-					HaxeCBridge::mainThreadRun(HaxeCBridgeInternal::processNativeCalls, haxeExceptionCallback);
+					if (firstRun) {
+						HaxeCBridge::runUserMain();
+					}
+					HaxeCBridge::mainThreadRunEventLoop(HaxeCBridgeInternal::processNativeCalls, haxeExceptionCallback);
 				} else {
-					// failed to initialize statics; unlock init semaphore so _initializeHaxeThread can continue and report the exception 
+					// failed to initialize statics; unlock init semaphore so _startHaxeThread can continue and report the exception 
 					HaxeCBridgeInternal::threadInitSemaphore.Set();
 				}
 
@@ -397,7 +400,7 @@ class HaxeCBridge {
 			}
 
 			HXCPP_EXTERN_CLASS_ATTRIBUTES
-			const char* ${namespace}_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
+			const char* ${namespace}_startHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
 				HaxeCBridgeInternal::HaxeThreadData threadData = {
 					.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? HaxeCBridgeInternal::defaultExceptionHandler : unhandledExceptionCallback,
 					.initExceptionInfo = nullptr,
@@ -406,16 +409,14 @@ class HaxeCBridge {
 				{
 					// mutex prevents two threads calling this function from being able to start two haxe threads
 					AutoLock lock(HaxeCBridgeInternal::threadManageMutex);
-					if (!HaxeCBridgeInternal::threadStarted) {
+					if (!HaxeCBridgeInternal::threadRunning) {
 						// startup the haxe main thread
 						HxCreateDetachedThread(haxeMainThreadFunc, &threadData);
-
-						HaxeCBridgeInternal::threadStarted = true;
 
 						// wait until the thread is initialized and ready
 						HaxeCBridgeInternal::threadInitSemaphore.Wait();
 					} else {
-						threadData.initExceptionInfo = "haxe thread cannot be started twice";
+						threadData.initExceptionInfo = "haxe thread is already running";
 					}
 				}
 				
@@ -436,14 +437,14 @@ class HaxeCBridge {
 				if (HaxeCBridgeInternal::isHaxeMainThread()) {
 					// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on HaxeCBridgeInternal::threadEndSemaphore
 					// so it is important the haxe thread does not wait on certain locks
-					HaxeCBridge::endMainThread(waitOnScheduledEvents);
+					HaxeCBridge::endMainThreadEventLoop(waitOnScheduledEvents);
 				} else {
 					AutoLock lock(HaxeCBridgeInternal::threadManageMutex);
 					if (HaxeCBridgeInternal::threadRunning) {
 						struct Callback {
 							static void run(void* data) {
 								bool* b = (bool*) data;
-								HaxeCBridge::endMainThread(*b);
+								HaxeCBridge::endMainThreadEventLoop(*b);
 							}
 						};
 
@@ -574,7 +575,7 @@ class HaxeCBridge {
 						};
 
 						#ifdef HXCPP_DEBUG
-						assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use ${namespace}_initializeHaxeThread() to activate the haxe thread");
+						assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use ${namespace}_startHaxeThread() to activate the haxe thread");
 						#endif
 
 						$fnDataTypeName $fnDataName = { {${signature.args.map(a->a.name).join(', ')}} };
@@ -1316,20 +1317,34 @@ import sys.thread.Thread;
 class HaxeCBridge {
 
 	#if (haxe_ver >= 4.2)
+	/**
+		Main thread may be started multiple times and each time it will start on a different thread
+		After this is executed, the haxe-thread-started semaphore is tripped
+
+		- @! **Hxcpp GC seems to get stuck on major collection after restart**
+	**/
 	@:noCompletion
-	static public function mainThreadInit() @:privateAccess {
+	static public function mainThreadStart() @:privateAccess {
 		// replaces __hxcpp_main() in __main__.cpp
 		Thread.initEventLoop();
-
-		Internal.mainThread = Thread.current();
-		Internal.mainThreadWaitLock = Thread.current().events.waitLock;
-
 		EntryPoint.init();
+		Internal.mainThread = Thread.current();
+		Internal.mainThreadWaitLock = Internal.mainThread.events.waitLock;
+		Internal.mainThreadLoopActive = true;
+		Internal.mainThreadEndIfNoPending = false;
 	}
 
 	@:noCompletion
-	static public function mainThreadRun(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
-		runUserMain();
+	static public function runUserMain() @:privateAccess {
+		runUserMainMacro();
+	}
+
+	/**
+		Blocks until endMainThreadEventLoop() is called
+	**/
+	@:noCompletion
+	static public function mainThreadRunEventLoop(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
+		trace('starting event loop');
 
 		// run always-alive event loop
 		var eventLoop:CustomEventLoop = Thread.current().events;
@@ -1359,8 +1374,11 @@ class HaxeCBridge {
 			}
 		}
 
+		trace('ending event loop');
+
 		// run a major collection when the thread ends
 		cpp.vm.Gc.run(true);
+		trace('-> gc complete');
 	}
 	#else
 	@:noCompletion
@@ -1370,8 +1388,8 @@ class HaxeCBridge {
 	}
 
 	@:noCompletion
-	static public function mainThreadRun(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
-		runUserMain();
+	static public function mainThreadRunEventLoop(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
+		runUserMainMacro();
 
 		while (Internal.mainThreadLoopActive) {
 			try {
@@ -1403,16 +1421,19 @@ class HaxeCBridge {
 	static public inline function isMainThread(): Bool {
 		return inline Thread.current() == Internal.mainThread;
 	}
-	
+
 	/** not thread-safe, must be called in the haxe main thread **/
 	@:noCompletion
-	static public function endMainThread(waitOnScheduledEvents: Bool) {
+	static public function endMainThreadEventLoop(waitOnScheduledEvents: Bool) {
 		Internal.mainThreadEndIfNoPending = true;
 		Internal.mainThreadLoopActive = Internal.mainThreadLoopActive && waitOnScheduledEvents;
 		inline wakeMainThread();
 	}
 
-	/** called from _unattached_ external thread, must not allocate in hxcpp **/
+	/**
+		Called from _unattached_ external thread, must not allocate in hxcpp.
+		Must be called only after thread start semaphore tripped (otherwise main thread lock may not yet be correctly assigned)
+	**/
 	@:noDebug
 	@:noCompletion
 	static public function wakeMainThread() {
@@ -1420,15 +1441,15 @@ class HaxeCBridge {
 	}
 
 	@:noCompletion
-	static macro function runUserMain() { /* implementation provided above in macro version of HaxeCBridge */ }
+	static macro function runUserMainMacro() { /* implementation provided above in macro version of HaxeCBridge */ }
 
 }
 
 private class Internal {
 	public static var mainThread: Thread;
 	public static var mainThreadWaitLock: Lock;
-	public static var mainThreadLoopActive: Bool = true;
-	public static var mainThreadEndIfNoPending: Bool = false;
+	public static var mainThreadLoopActive: Bool;
+	public static var mainThreadEndIfNoPending: Bool;
 }
 
 #if (haxe_ver >= 4.2)
