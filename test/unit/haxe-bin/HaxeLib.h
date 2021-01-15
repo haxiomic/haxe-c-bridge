@@ -32,8 +32,8 @@ enum HaxeLib_IntEnumAbstract {
 	A = 0,
 	B = 1
 };
-typedef int64_t HaxeLib_ExampleObjectHandle;
 
+typedef void* HaxeObject;
 typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
 
 #ifdef __cplusplus
@@ -41,7 +41,7 @@ extern "C" {
 #endif
 
 	/**
-	 * Initializes a haxe thread that remains alive indefinitely and executes the user's haxe main().
+	 * Initializes a haxe thread that executes the haxe main() function remains alive indefinitely until told to stop.
 	 * 
 	 * This must be first before calling haxe functions (otherwise those calls will hang waiting for a response from the haxe thread).
 	 * 
@@ -64,6 +64,17 @@ extern "C" {
 	 * @param waitOnScheduledEvents If `true`, this function will wait for all events scheduled to execute in the future on the haxe thread to complete – this is the same behavior as running a normal hxcpp program. If `false`, immediate pending events will be finished and the thread stopped without executing events scheduled in the future
 	 */
 	void HaxeLib_stopHaxeThreadIfRunning(bool waitOnScheduledEvents);
+
+	/**
+	 * Informs the garbage collector that object is no longer needed by the C code.
+	 * 
+	 * If the object has no remaining reference the garbage collector will free the associated memory (which can happen at any time in the future). It does not free the memory immediately.
+	 * 
+	 * Thread-safety: can be called on any thread.
+	 * 					
+	 * @param haxeObject a handle to an arbitrary haxe object returned from a haxe function
+	 */
+	void HaxeLib_releaseHaxeObject(HaxeObject haxeObject);
 
 	/**
 	 * Some doc
@@ -117,11 +128,9 @@ extern "C" {
 	 */
 	uint64_t HaxeLib_cppCoreTypes2(int i, double f, float s, signed char i8, short i16, int i32, int64_t i64, uint64_t ui64, const char* str);
 
-	HaxeLib_ExampleObjectHandle HaxeLib_createHaxeObject();
+	HaxeObject HaxeLib_createHaxeObject();
 
-	void HaxeLib_testHaxeObject(HaxeLib_ExampleObjectHandle handle);
-
-	bool HaxeLib_destroyHaxeObject(HaxeLib_ExampleObjectHandle handle);
+	void HaxeLib_testHaxeObject(HaxeObject handle);
 
 	void HaxeLib_throwException();
 

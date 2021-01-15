@@ -8,6 +8,7 @@
 #include <hx/StdLibs.h>
 #include <hx/GC.h>
 #include <HaxeCBridge.h>
+#include <Retainer.h>
 #include <assert.h>
 #include <queue>
 #include <utility>
@@ -170,6 +171,16 @@ void HaxeLib_stopHaxeThreadIfRunning(bool waitOnScheduledEvents) {
 			}
 		}
 	}
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+void HaxeLib_releaseHaxeObject(HaxeObject obj) {
+	struct Callback {
+		static void run(void* data) {
+			HaxeCBridge::releaseHaxeObject(Retainer((hx::Object *)data, false));
+		}
+	};
+	HaxeCBridgeInternal::runInMainThread(Callback::run, obj);
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
@@ -645,21 +656,21 @@ uint64_t HaxeLib_cppCoreTypes2(int a0, double a1, float a2, signed char a3, shor
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-HaxeLib_ExampleObjectHandle HaxeLib_createHaxeObject() {
+HaxeObject HaxeLib_createHaxeObject() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
-		return test::HxPublicApi_obj::createHaxeObject();
+		return (HaxeObject)(test::HxPublicApi_obj::createHaxeObject().mPtr);
 	}
 	struct Data {
 		struct {} args;
 		HxSemaphore lock;
-		HaxeLib_ExampleObjectHandle ret;
+		HaxeObject ret;
 	};
 	struct Callback {
 		static void run(void* p) {
 			// executed within the haxe main thread
 			Data* data = (Data*) p;
 			try {
-				data->ret = test::HxPublicApi_obj::createHaxeObject();
+				data->ret = (HaxeObject)(test::HxPublicApi_obj::createHaxeObject().mPtr);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -681,12 +692,12 @@ HaxeLib_ExampleObjectHandle HaxeLib_createHaxeObject() {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-void HaxeLib_testHaxeObject(HaxeLib_ExampleObjectHandle a0) {
+void HaxeLib_testHaxeObject(HaxeObject a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
-		return test::HxPublicApi_obj::testHaxeObject(a0);
+		return test::HxPublicApi_obj::testHaxeObject(Retainer((hx::Object *)a0, false));
 	}
 	struct Data {
-		struct {HaxeLib_ExampleObjectHandle a0;} args;
+		struct {HaxeObject a0;} args;
 		HxSemaphore lock;
 	};
 	struct Callback {
@@ -694,7 +705,7 @@ void HaxeLib_testHaxeObject(HaxeLib_ExampleObjectHandle a0) {
 			// executed within the haxe main thread
 			Data* data = (Data*) p;
 			try {
-				test::HxPublicApi_obj::testHaxeObject(data->args.a0);
+				test::HxPublicApi_obj::testHaxeObject(Retainer((hx::Object *)data->args.a0, false));
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -712,42 +723,6 @@ void HaxeLib_testHaxeObject(HaxeLib_ExampleObjectHandle a0) {
 	// queue a callback to execute testHaxeObject() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
 	data.lock.Wait();
-}
-
-HXCPP_EXTERN_CLASS_ATTRIBUTES
-bool HaxeLib_destroyHaxeObject(HaxeLib_ExampleObjectHandle a0) {
-	if (HaxeCBridgeInternal::isHaxeMainThread()) {
-		return test::HxPublicApi_obj::destroyHaxeObject(a0);
-	}
-	struct Data {
-		struct {HaxeLib_ExampleObjectHandle a0;} args;
-		HxSemaphore lock;
-		bool ret;
-	};
-	struct Callback {
-		static void run(void* p) {
-			// executed within the haxe main thread
-			Data* data = (Data*) p;
-			try {
-				data->ret = test::HxPublicApi_obj::destroyHaxeObject(data->args.a0);
-				data->lock.Set();
-			} catch(Dynamic runtimeException) {
-				data->lock.Set();
-				throw runtimeException;
-			}
-		}
-	};
-
-	#ifdef HXCPP_DEBUG
-	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
-	#endif
-
-	Data data = { {a0} };
-
-	// queue a callback to execute destroyHaxeObject() on the main thread and wait until execution completes
-	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
-	data.lock.Wait();
-	return data.ret;
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
