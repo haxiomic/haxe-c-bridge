@@ -4,7 +4,7 @@
 
 	// fast path for when code gen isn't required
 	// disable this to get auto-complete when editing this file
-	#if false &&  (display || display_details || target.name != cpp)
+	#if (display || display_details || target.name != cpp)
 
 class HaxeCBridge {
 	public static function build(?namespace: String)
@@ -238,6 +238,7 @@ class HaxeCBridge {
 			+ (if (includes.length > 0) includes.map(CPrinter.printInclude).join('\n') + '\n\n'; else '')
 			+ (if (ctx.macros.length > 0) ctx.macros.join('\n') + '\n' else '')
 			+ (if (ctx.typeDeclarations.length > 0) ctx.typeDeclarations.map(d -> CPrinter.printDeclaration(d, true)).join(';\n') + ';\n\n'; else '')
+			+ (if (ctx.supportTypeDeclarations.length > 0) ctx.supportTypeDeclarations.map(d -> CPrinter.printDeclaration(d, true)).join(';\n') + ';\n'; else '')
 
 			+ code('
 			typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
@@ -247,7 +248,7 @@ class HaxeCBridge {
 			#endif
 
 				/**
-				 * Initializes a haxe thread that remains alive indefinitely and executes the user\'s haxe main().
+				 * Initializes a haxe thread that executes the haxe main() function remains alive indefinitely until told to stop.
 				 * 
 				 * This must be first before calling haxe functions (otherwise those calls will hang waiting for a response from the haxe thread).
 				 * 
@@ -272,7 +273,7 @@ class HaxeCBridge {
 				void ${namespace}_stopHaxeThreadIfRunning(bool waitOnScheduledEvents);
 
 		')
-
+		+ indent(1, ctx.supportFunctionDeclarations.map(fn -> CPrinter.printDeclaration(fn, true)).join(';\n\n') + ';\n\n')
 		+ indent(1, ctx.functionDeclarations.map(fn -> CPrinter.printDeclaration(fn, true)).join(';\n\n') + ';\n\n')
 
 		+ code('
@@ -296,6 +297,7 @@ class HaxeCBridge {
 			#include <hx/StdLibs.h>
 			#include <hx/GC.h>
 			#include <HaxeCBridge.h>
+			#include <Retainer.h>
 			#include <assert.h>
 			#include <queue>
 			#include <utility>
@@ -459,6 +461,16 @@ class HaxeCBridge {
 				}
 			}
 
+			HXCPP_EXTERN_CLASS_ATTRIBUTES
+			void ${namespace}_releaseHaxeObject(HaxeObject obj) {
+				struct Callback {
+					static void run(void* data) {
+						HaxeCBridge::releaseHaxeObject(Retainer((hx::Object *)data, false));
+					}
+				};
+				HaxeCBridgeInternal::runInMainThread(Callback::run, obj);
+			}
+
 		')
 		+ ctx.functionDeclarations.map(d -> generateFunctionImplementation(namespace, d)).join('\n') + '\n'
 		;
@@ -483,6 +495,7 @@ class HaxeCBridge {
 			// type cast argument before passing to hxcpp
 			return switch rootCType {
 				case Enum(_): expr; // enum to int works with implicit cast
+				case Ident('HaxeObject'): 'Retainer((hx::Object *)$expr, false)';
 				case Ident(_), FunctionPointer(_), InlineStruct(_), Pointer(_): expr; // hxcpp auto casting works
 			}
 		}
@@ -491,6 +504,7 @@ class HaxeCBridge {
 			// cast hxcpp type to c
 			return switch rootCType {
 				case Enum(_): 'static_cast<${CPrinter.printType(cType)}>($expr)'; // need explicit cast for int -> enum
+				case Ident('HaxeObject'): '(HaxeObject)($expr.mPtr)';
 				case Ident(_), FunctionPointer(_), InlineStruct(_), Pointer(_): expr; // hxcpp auto casting works
 			}
 		}
@@ -782,6 +796,12 @@ class CConverterContext {
 	public final includes = new Array<CInclude>();
 	public final macros = new Array<String>();
 
+	public final supportTypeDeclarations = new Array<CDeclaration>();
+	final supportDeclaredTypeIdentifiers = new Map<String, Bool>();
+
+	public final supportFunctionDeclarations = new Array<CDeclaration>();
+	final supportDeclaredFunctionIdentifiers = new Map<String, Position>();
+
 	public final typeDeclarations = new Array<CDeclaration>();
 	final declaredTypeIdentifiers = new Map<String, Bool>();
 	
@@ -917,7 +937,7 @@ class CConverterContext {
 					}
 					Ident(ident);
 				} else {
-					Context.error('Could not convert type "${TypeTools.toString(type)}" to C representation', pos);
+					Context.error('Could not convert type "${TypeTools.toString(type)}" to C representation. To safely pass arbitrary haxe objects to C you can wrap them opaquely in HaxeCBridge.Retainer<T>', pos);
 				}
 
 			case TFun(args, ret):
@@ -928,7 +948,7 @@ class CConverterContext {
 				}
 
 			case TAnonymous(a):
-				Context.error("Haxe structures are not supported when exposing to C, try using an extern for a C struct instead", pos);
+				Context.error("Haxe structures are not supported when exposing to C, try using an extern for a C struct instead (you may also wrapping the object opaquely in HaxeCBridge.Retainer<T>)", pos);
 
 			case TAbstract(_.get() => t, _):
 				var keyCType = tryConvertKeyType(type, allowNonTrivial, allowBareFnTypes, pos);
@@ -1078,11 +1098,11 @@ class CConverterContext {
 				}}:
 					Context.error('cpp.$name is not supported for C export', pos);
 
-				// if the type is in the cpp package and has :native(ident), use that
-				// this isn't ideal because the relevant C header may not be included
-				// case {t: {pack: ['cpp'], meta: _.extract(':native') => [{params: [{expr: EConst(CString(nativeName))}]}] } }:
-				// 	Ident(nativeName);
-
+				// special type that ensures a GC reference is retained so it can be safely handled in C
+				// resolves to void*
+				case {t: {pack: [], name: 'Retainer', params: [tp]} }:
+					getHaxeObjectCType(tp.t);
+					
 				default:
 					// case {pack: [], name: "EnumValue"}: Ident
 					// case {pack: [], name: "Class"}: Ident
@@ -1205,6 +1225,35 @@ class CConverterContext {
 		}
 	}
 
+	function getHaxeObjectCType(t: Type): CType {
+		var ident = 'HaxeObject';
+		if (!supportDeclaredTypeIdentifiers.exists(ident)) {
+			supportTypeDeclarations.push({
+				kind: Typedef(Pointer(Ident('void')), [ident])
+			});
+			supportDeclaredTypeIdentifiers.set(ident, true);
+		}
+		if (!supportDeclaredFunctionIdentifiers.exists(ident)) {
+			supportFunctionDeclarations.push({
+				doc: code('
+					Informs the garbage collector that object is no longer needed by the C code.
+
+					If the object has no remaining reference the garbage collector will free the associated memory (which can happen at any time in the future). It does not free the memory immediately.
+
+					Thread-safety: can be called on any thread.
+					
+					@param haxeObject a handle to an arbitrary haxe object returned from a haxe function'),
+				kind: Function({
+					name: '${declarationPrefix}_releaseHaxeObject',
+					args: [{name: 'haxeObject', type: Ident(ident)}],
+					ret: Ident('void')
+				})
+			});
+			supportDeclaredFunctionIdentifiers.set(ident, Context.currentPos());
+		}
+		return Ident(ident);
+	}
+
 	// generate a type identifier for declaring a haxe type in C
 	function typeDeclarationIdent(type: Type) {
 		return safeIdent(TypeTools.toString(type));
@@ -1217,6 +1266,9 @@ class CConverterContext {
 		str = ~/^[^a-z_]/i.replace(str, '_');
 		// replace empty string with _
 		str = str == '' ? '_' : str;
+		if (cKeywords.has(str)) {
+			str = str + '_';
+		}
 		return str;
 	}
 
@@ -1304,6 +1356,7 @@ class CodeTools {
 // runtime HaxeCBridge
 
 import cpp.Callable;
+import cpp.Int64;
 import cpp.Star;
 import haxe.EntryPoint;
 import sys.thread.Lock;
@@ -1329,7 +1382,11 @@ class HaxeCBridge {
 
 	@:noCompletion
 	static public function mainThreadRun(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
-		runUserMain();
+		try {
+			runUserMain();
+		} catch (e: Any) {
+			onUnhandledException(Std.string(e));
+		}
 
 		// run always-alive event loop
 		var eventLoop:CustomEventLoop = Thread.current().events;
@@ -1371,7 +1428,11 @@ class HaxeCBridge {
 
 	@:noCompletion
 	static public function mainThreadRun(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
-		runUserMain();
+		try {
+			runUserMain();
+		} catch (e: Any) {
+			onUnhandledException(Std.string(e));
+		}
 
 		while (Internal.mainThreadLoopActive) {
 			try {
@@ -1398,6 +1459,10 @@ class HaxeCBridge {
 		cpp.vm.Gc.run(true);
 	}
 	#end
+
+	static public function releaseHaxeObject(haxeObject: Retainer<Any>) {
+		haxeObject.release();
+	}
 
 	@:noCompletion
 	static public inline function isMainThread(): Bool {
@@ -1429,6 +1494,64 @@ private class Internal {
 	public static var mainThreadWaitLock: Lock;
 	public static var mainThreadLoopActive: Bool = true;
 	public static var mainThreadEndIfNoPending: Bool = false;
+}
+
+/**
+	Ensures a reference is retained to a given haxe object to prevent collection by the GC until release() is called.
+**/
+@:nullSafety
+class Retainer<T> {
+
+	static var retainedCount(default, null): Int64 = 0;
+	static var retainListLast: Null<Retainer<Any>> = null;
+	static var retainListMutex = new Mutex();
+
+	public final value: T;
+
+	var listPrevious: Null<Retainer<Any>> = null;
+	var listNext: Null<Retainer<Any>> = null;
+	var retained = true;
+
+	public function new(value: T) {
+		this.value = value;
+
+		retainListMutex.acquire();
+		// retain
+		if (retainListLast != null) {
+			retainListLast.listNext = this;
+			listPrevious = retainListLast;
+		}
+		retainListLast = this;
+		retainedCount++;
+		retainListMutex.release();
+	}
+
+	/**
+		Informs the garbage collector that an external reference is no longer required and the object in the value field may be collected (if no other haxe references remain)
+
+		Only call this if the value is no-longer required by C
+	**/
+	public function release() {
+		if (retained) {
+			retainListMutex.acquire();
+			// cut this item out of the list and stitch up
+			if (listPrevious != null) {
+				listPrevious.listNext = listNext;
+			}
+			if (listNext != null) {
+				listNext.listPrevious = listPrevious;
+			} else {
+				// last item in the list
+				retainListLast = listPrevious;
+			}
+			listNext = null;
+			listPrevious = null;
+			retained = false;
+			retainedCount--;
+			retainListMutex.release();
+		}
+	}
+
 }
 
 #if (haxe_ver >= 4.2)
