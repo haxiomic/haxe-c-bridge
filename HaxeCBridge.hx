@@ -1226,14 +1226,17 @@ class CConverterContext {
 	}
 
 	function getHaxeObjectCType(t: Type): CType {
-		var ident = 'HaxeObject';
-		if (!supportDeclaredTypeIdentifiers.exists(ident)) {
+		// in the future we could specialize based on t (i.e. generating another typedef name like HaxeObject_SomeType)
+		var typeIdent = 'HaxeObject';
+		var functionIdent = '${declarationPrefix}_releaseHaxeObject';
+
+		if (!supportDeclaredTypeIdentifiers.exists(typeIdent)) {
 			supportTypeDeclarations.push({
-				kind: Typedef(Pointer(Ident('void')), [ident])
+				kind: Typedef(Pointer(Ident('void')), [typeIdent])
 			});
-			supportDeclaredTypeIdentifiers.set(ident, true);
+			supportDeclaredTypeIdentifiers.set(typeIdent, true);
 		}
-		if (!supportDeclaredFunctionIdentifiers.exists(ident)) {
+		if (!supportDeclaredFunctionIdentifiers.exists(functionIdent)) {
 			supportFunctionDeclarations.push({
 				doc: code('
 					Informs the garbage collector that object is no longer needed by the C code.
@@ -1244,14 +1247,14 @@ class CConverterContext {
 					
 					@param haxeObject a handle to an arbitrary haxe object returned from a haxe function'),
 				kind: Function({
-					name: '${declarationPrefix}_releaseHaxeObject',
-					args: [{name: 'haxeObject', type: Ident(ident)}],
+					name: functionIdent,
+					args: [{name: 'haxeObject', type: Ident(typeIdent)}],
 					ret: Ident('void')
 				})
 			});
-			supportDeclaredFunctionIdentifiers.set(ident, Context.currentPos());
+			supportDeclaredFunctionIdentifiers.set(functionIdent, Context.currentPos());
 		}
-		return Ident(ident);
+		return Ident(typeIdent);
 	}
 
 	// generate a type identifier for declaring a haxe type in C
@@ -1295,7 +1298,9 @@ class CConverterContext {
 
 	static public final cKeywords: Array<String> = [
 		"auto", "double", "int", "struct", "break", "else", "long", "switch", "case", "enum", "register", "typedef", "char", "extern", "return", "union", "const", "float", "short", "unsigned", "continue", "for", "signed", "void", "default", "goto", "sizeof", "volatile", "do", "if", "static", "while",
-		"size_t", "int64_t", "uint64_t"
+		"size_t", "int64_t", "uint64_t",
+		// HaxeCBridge types
+		"HaxeObject", "HaxeExceptionCallback",
 	];
 
 }
