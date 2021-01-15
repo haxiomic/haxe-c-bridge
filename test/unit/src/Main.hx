@@ -1,3 +1,4 @@
+import HaxeCBridge.Retainer;
 import cpp.Callable;
 import cpp.ConstCharStar;
 import cpp.ConstStar;
@@ -28,6 +29,9 @@ class Main {
 	static function main() {
 		trace('main(): Hello from haxe ${Macro.getHaxeVersion()} and hxcp ${Macro.getHxcppVersion()}');
 		pack.ExampleClass; // make sure example class is referenced so the c api is generated
+
+		// validate retainer list behaves correctly
+		retainerTests();
 
 		function loop() {
 			staticLoopCount++;
@@ -62,6 +66,48 @@ class Main {
 
 	static public function printTime() {
 		trace(Date.now().toString());
+	}
+
+	static function retainerTests() @:privateAccess {
+		var r = [for (i in 0...5) new Retainer(i)];
+		Retainer.retainListMutex.acquire();
+		if (Retainer.retainedCount != 5) throw 'Expected 100';
+		Retainer.retainListMutex.release();
+
+		// enumerate list
+		function step(item: Retainer<Any>): Null<Retainer<Any>> {
+			return item.listPrevious;
+		}
+
+		function enumerateRetained() {
+			var values = new Array<Int>();
+			Retainer.retainListMutex.acquire();
+			var curr = Retainer.retainListLast;
+			Retainer.retainListMutex.release();
+			while(curr != null) {
+				values.push(curr.value);
+				curr = step(curr);
+			}
+			return values;
+		}
+
+		function testStr(str, expected) {
+			if (str != expected) {
+				throw 'Retainer tested failed: Expected "$expected" but got "$str"';
+			}
+		}
+
+		// test retain list looks correct
+		// remove first, then last, then a middle item
+		testStr(enumerateRetained().join(','), '4,3,2,1,0');
+		r[0].release();
+		testStr(enumerateRetained().join(','), '4,3,2,1');
+		r[4].release();
+		testStr(enumerateRetained().join(','), '3,2,1');
+		r[2].release();
+		testStr(enumerateRetained().join(','), '3,1');
+		new Retainer(5);
+		testStr(enumerateRetained().join(','), '5,3,1');
 	}
 
 }
@@ -221,25 +267,18 @@ class PublicCApi {
 		return 1;
 	}
 
-	static var objects = new Map<ExampleObjectHandle, {str: String}>();
-	static var objectHandleCounter: ExampleObjectHandle = 1;
 	static public function createHaxeObject() {
 		var obj = {str: 'still alive'};
-		var objHandle = objectHandleCounter++;
-		objects.set(objHandle, obj);
-		return objHandle;
+		return new Retainer(obj);
 	}
-	static public function testHaxeObject(handle: ExampleObjectHandle) {
-		var obj = objects.get(handle);
+	static public function testHaxeObject(handle: Retainer<{str: String}>) {
+		var obj = handle.value;
 		if (obj == null) {
 			throw 'Object not found for handle $handle';
 		}
 		if (obj.str != 'still alive') {
 			throw 'Object str field was wrong';
 		}
-	}
-	static public function destroyHaxeObject(handle: ExampleObjectHandle) {
-		return objects.remove(handle);
 	}
 
 	static public function throwException(): Void {
@@ -257,5 +296,6 @@ class PublicCApi {
 	// static public function typeParam<T>(x: T): T return x;
 	// optional not supported; all args are required when calling from C
 	// static public function optional(?single: Single): Void { }
+	// static public function map() return new Map(); // no way to represent in haxe (without using Retainer)
 
 }

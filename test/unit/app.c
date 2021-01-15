@@ -117,12 +117,19 @@ int main(void) {
 	assert(HaxeLib_enumTypes(B, "AAA", AAA) == BBB);
 
 	// haxe object
-	HaxeLib_ExampleObjectHandle obj = HaxeLib_createHaxeObject();
-	// run a major GC to make sure obj would be collected if not protected
-	HaxeLib_Main_hxcppGcRun(true);
-	HaxeLib_testHaxeObject(obj);
-	assert(HaxeLib_destroyHaxeObject(obj));
-	assert(!HaxeLib_destroyHaxeObject(obj));
+	for (int i = 0; i < 100; i++) {
+		HaxeObject obj = HaxeLib_createHaxeObject();
+		// run a major GC to make sure obj would be collected if not protected
+		HaxeLib_Main_hxcppGcRun(true);
+		HaxeLib_testHaxeObject(obj);
+		HaxeLib_releaseHaxeObject(obj);
+		/*
+		To validate haxe object release worked, uncomment this with ASan enabled; should crash :)
+		HaxeLib_add(1,1); // < executing another call on the main thread first ensures the call to release executed (as that call is async)
+		HaxeLib_Main_hxcppGcRun(true);
+		HaxeLib_testHaxeObject(obj);
+		*/
+	}
 
 	// sleep one second and verify the haxe thread event loop continued to run
 	log("sleeping 1s to let the haxe thread event loop run");
