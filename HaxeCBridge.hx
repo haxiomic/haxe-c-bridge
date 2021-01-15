@@ -15,7 +15,7 @@
 		- The first argument of build() sets generated C function name prefix: `build('Example')` or `build('')` for no prefix
 	- Add `-D dll_link` or `-D static_link` to compile your haxe program into a native library binary
 	- HaxeCBridge will then generate a header file in your build output directory named after your `--main` class (however a `--main` class is not required to use HaxeCBridge)
-		- Change the generated library name by adding `-D cbridge-name=YourLibName` to your hxml
+		- Change the generated library name by adding `-D HaxeCBridge.name=YourLibName` to your hxml
 
 	C-side:
 	- Include the generated header and link with the hxcpp generated library binary
@@ -662,12 +662,12 @@ class HaxeCBridge {
 	/**
 		We determine a project name to be the `--main` startup class or the first specified class-path
 
-		The user can override this with `-D cbridge-name=ExampleName`
+		The user can override this with `-D HaxeCBridge.name=ExampleName`
 
 		This isn't rigorously defined but hopefully will produced nicely namespaced and unsurprising function names
 	**/
 	static function getLibNameFromHaxeArgs(): Null<String> {
-		var overrideName = Context.definedValue('cbridge-name');
+		var overrideName = Context.definedValue('HaxeCBridge.name');
 		if (overrideName != null && overrideName != '') {
 			return safeIdent(overrideName);
 		}

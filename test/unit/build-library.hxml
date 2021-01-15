@@ -15,6 +15,6 @@
 -D dll_link
 
 # name the output header
--D cbridge-name=HaxeLib
+-D HaxeCBridge.name=HaxeLib
 
 --debug
