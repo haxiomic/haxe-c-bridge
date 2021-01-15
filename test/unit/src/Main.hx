@@ -36,10 +36,12 @@ class Main {
 		loop();
 	}
 
-	static public function stopLooping() {
-		if (loopTimer != null) {
-			loopTimer.stop();
-		}
+	static public function stopLoopingAfterTime_ms(milliseconds: Int) {
+		haxe.Timer.delay(() -> {
+			if (loopTimer != null) {
+				loopTimer.stop();
+			}
+		}, milliseconds);
 	}
 
 	static public function getLoopCount() {

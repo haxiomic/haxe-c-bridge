@@ -52,6 +52,13 @@ void fnStruct(MessagePayload msg) {
 	assert(strcmp(msg.cStr, "hello") == 0);
 }
 
+double deltaTime_ns(struct timespec start, struct timespec end) {
+	return (double)(end.tv_sec - start.tv_sec) * 1.0e9 + (double)(end.tv_nsec - start.tv_nsec);
+}
+double deltaTime_ms(struct timespec start, struct timespec end) {
+	return deltaTime_ns(start, end) / 1e6;
+}
+
 int main(void) {
 	log("Hello From C");
 	
@@ -136,8 +143,7 @@ int main(void) {
 		}
 		clock_gettime(CLOCK_REALTIME, &end);
 		HaxeLib_Main_printTime();
-		double dt_ns = (double)(end.tv_sec - start.tv_sec) * 1.0e9 + (double)(end.tv_nsec - start.tv_nsec);
-		int dt_ms = dt_ns / 1e6;
+		int dt_ms = deltaTime_ms(start, end);
 		logf("-> total time: %d (ms)", dt_ms);
 		logf("-> per call: %f (ms)", (double) dt_ms / (callCount));
 	}
@@ -158,15 +164,22 @@ int main(void) {
 
 	// if we don't call this then the infinite haxe.Timer loop will keep the main thread alive
 	// (unless we use `HaxeLib_stopHaxeThreadIfRunning(false)`)
-	HaxeLib_Main_stopLooping();
+	HaxeLib_Main_stopLoopingAfterTime_ms(1000);
 
 	// check unhandled exception callback fires
 	log("Testing triggering exception in haxe"); // this is asynchronous
 	HaxeLib_throwException();
 
 	// end the haxe thread (this will block while the haxe thread finishes processing immediate pending events)
+	struct timespec start;
+	struct timespec end;
+	clock_gettime(CLOCK_REALTIME, &start);
 	log("Stopping haxe thread and waiting for pending events to complete");
 	HaxeLib_stopHaxeThreadIfRunning(true);
+	clock_gettime(CLOCK_REALTIME, &end);
+	// because waitOnScheduledEvents == true we expect stop haxe thread to block until the looping has stopped (which we scheduled 1s in the future)
+	// (whereas if waitOnScheduledEvents == false we expect to stop to be nearly immediate)
+	assert(deltaTime_ms(start, end) >= 500);
 
 	// trying to reinitialize haxe thread should fail
 	log("Starting haxe thread");

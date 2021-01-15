@@ -785,12 +785,12 @@ void HaxeLib_throwException() {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-void HaxeLib_Main_stopLooping() {
+void HaxeLib_Main_stopLoopingAfterTime_ms(int a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
-		return Main_obj::stopLooping();
+		return Main_obj::stopLoopingAfterTime_ms(a0);
 	}
 	struct Data {
-		struct {} args;
+		struct {int a0;} args;
 		HxSemaphore lock;
 	};
 	struct Callback {
@@ -798,7 +798,7 @@ void HaxeLib_Main_stopLooping() {
 			// executed within the haxe main thread
 			Data* data = (Data*) p;
 			try {
-				Main_obj::stopLooping();
+				Main_obj::stopLoopingAfterTime_ms(data->args.a0);
 				data->lock.Set();
 			} catch(Dynamic runtimeException) {
 				data->lock.Set();
@@ -811,9 +811,9 @@ void HaxeLib_Main_stopLooping() {
 	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
 	#endif
 
-	Data data = { {} };
+	Data data = { {a0} };
 
-	// queue a callback to execute stopLooping() on the main thread and wait until execution completes
+	// queue a callback to execute stopLoopingAfterTime_ms() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
 	data.lock.Wait();
 }

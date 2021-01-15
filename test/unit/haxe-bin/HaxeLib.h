@@ -125,7 +125,7 @@ extern "C" {
 
 	void HaxeLib_throwException();
 
-	void HaxeLib_Main_stopLooping();
+	void HaxeLib_Main_stopLoopingAfterTime_ms(int milliseconds);
 
 	int HaxeLib_Main_getLoopCount();
 
