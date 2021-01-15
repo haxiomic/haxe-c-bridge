@@ -128,9 +128,9 @@ class HaxeCBridge {
 		Context.getLocalClass().get().meta.add(':keep', [], Context.currentPos());
 
 		if (firstRun) {
-			if (!isLibraryBuild()) {
-				Context.warning("HaxeCBridge: project is not compiled as a library – add -D dll_link or -D static_link to compile as a shared or static library", Context.currentPos());
-			}
+			// if (!isLibraryBuild()) {
+				// Context.warning("HaxeCBridge: project is not compiled as a library – add -D dll_link or -D static_link to compile as a shared or static library", Context.currentPos());
+			// }
 			
 			Context.onAfterTyping(_ -> {
 				for (item in queuedClasses) {
