@@ -84,7 +84,7 @@ extern "C" {
 	 */
 	void HaxeLib_voidRtn(int a, const char* b, HaxeLib_NonTrivialAlias c, HaxeLib_EnumAlias e);
 
-	void HaxeLib_noArgsNoReturn();
+	void HaxeNoArgsNoReturn();
 
 	/**
 	 * when called externally from C this function will be executed synchronously on the main thread
@@ -148,7 +148,7 @@ extern "C" {
 
 	int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate();
 
-	int HaxeLib_pack_ExampleClass_example();
+	int ExamplePrefix_example();
 
 #ifdef __cplusplus
 }

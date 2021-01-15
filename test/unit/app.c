@@ -146,7 +146,7 @@ int main(void) {
 		HaxeLib_Main_printTime();
 		clock_gettime(CLOCK_REALTIME, &start);
 		for (int64_t i = 0; i < callCount; i++) {
-			HaxeLib_noArgsNoReturn();
+			HaxeNoArgsNoReturn();
 		}
 		clock_gettime(CLOCK_REALTIME, &end);
 		HaxeLib_Main_printTime();

@@ -157,6 +157,7 @@ class PublicCApi {
 	**/
 	static public function voidRtn(a: Int, b: String, c: NonTrivialAlias, e: EnumAlias): Void {}
 
+	@HaxeCBridge.name('HaxeNoArgsNoReturn')
 	static public function noArgsNoReturn(): Void { }
 
 	/** when called externally from C this function will be executed synchronously on the main thread **/

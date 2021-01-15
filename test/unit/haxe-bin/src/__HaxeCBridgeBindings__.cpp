@@ -218,7 +218,7 @@ void HaxeLib_voidRtn(int a0, const char* a1, HaxeLib_NonTrivialAlias a2, HaxeLib
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-void HaxeLib_noArgsNoReturn() {
+void HaxeNoArgsNoReturn() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::noArgsNoReturn();
 	}
@@ -976,7 +976,7 @@ int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate() {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
-int HaxeLib_pack_ExampleClass_example() {
+int ExamplePrefix_example() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return pack::ExampleClass_obj::example();
 	}

@@ -1,6 +1,7 @@
 package pack;
 
 @:build(HaxeCBridge.build())
+@HaxeCBridge.name('ExamplePrefix')
 class ExampleClass {
 
 	static function main() {
