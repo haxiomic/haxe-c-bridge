@@ -180,7 +180,13 @@ class HaxeCBridge {
 
 		// prefix all functions with lib name and class path
 		var classPrefix = cls.pack.concat([namespace == null ? cls.name : namespace]);
+
+		var cNameMeta = getCNameMeta(cls.meta);
+
 		var functionPrefix =
+			if (cNameMeta != null)
+				[cNameMeta];
+			else 
 				[libName]
 				.concat(safeIdent(classPrefix.join('.')) != libName ? classPrefix : [])
 				.filter(s -> s != '');
@@ -198,7 +204,14 @@ class HaxeCBridge {
 				case TFunction(tfunc):
 
 					// add C function declaration
-					var cFuncName = functionPrefix.concat([f.name]).join('_');
+					var cNameMeta = getCNameMeta(f.meta);
+					
+					var cFuncName: String =
+						if (cNameMeta != null)
+							cNameMeta;
+						else
+							functionPrefix.concat([f.name]).join('_');
+
 					var cleanDoc = f.doc != null ? StringTools.trim(removeIndentation(f.doc)) : null;
 					cConversionContext.addTypedFunctionDeclaration(cFuncName, tfunc, cleanDoc, f.pos);
 
@@ -233,6 +246,18 @@ class HaxeCBridge {
 
 	static function isLibraryBuild() {
 		return Context.defined('dll_link') || Context.defined('static_link');
+	}
+
+	static function getCNameMeta(meta: MetaAccess): Null<String> {
+		var cNameMeta = meta.extract('HaxeCBridge.name')[0];
+		return if (cNameMeta != null) {
+			switch cNameMeta.params {
+				case [{expr: EConst(CString(name))}]:
+					safeIdent(name);
+				default:
+					Context.error('Incorrect usage, syntax is @${cNameMeta.name}(name: String)', cNameMeta.pos);
+			}
+		} else null;
 	}
 
 	static function generateHeader(ctx: CConverterContext, namespace: String) {
