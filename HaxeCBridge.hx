@@ -1,3 +1,29 @@
+/**
+	HaxeCBridge
+
+	A `@:build` macro to enable easy embedding of a multi-threaded haxe program within a native application via an automatically generated C header
+
+	Works with the hxcpp target and requires haxe 4.0 or newer
+
+	@author George Corney (haxiomic)
+	@license MIT
+
+	**Usage**
+
+	Haxe-side:
+	- Add `@:build(HaxeCBridge.build())` to a classes containing *public static* functions you want to expose to C
+		- The first argument of build() sets generated C function name prefix: `build('Example')` or `build('')` for no prefix
+	- Add `-D dll_link` or `-D static_link` to compile your haxe program into a native library binary
+	- HaxeCBridge will then generate a header file in your build output directory named after your `--main` class (however a `--main` class is not required to use HaxeCBridge)
+		- Change the generated library name by adding `-D cbridge-name=YourLibName` to your hxml
+
+	C-side:
+	- Include the generated header and link with the hxcpp generated library binary
+	- Before calling any haxe functions you must start the haxe thread: call `YourLibName_initializeHaxeThread(onHaxeException)`
+	- Now interact with your haxe library thread by calling the exposed functions
+	- When your program exits call `YourLibName_stopHaxeThread(true)`
+	
+**/
 #if (haxe_ver < 4.0) #error "Haxe 4.0 required" #end
 
 #if macro
