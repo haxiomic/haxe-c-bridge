@@ -20,7 +20,7 @@ C-side:
 - Now interact with your haxe library thread by calling the exposed functions
 - When your program exits call `YourLibName_stopHaxeThread(true)`
 
-See [test/unit](test/unit/src/Main.hx) for an example
+See [test/unit](test/unit) for a complete example
 
 ## Example
 
