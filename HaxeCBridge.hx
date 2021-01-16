@@ -1574,10 +1574,10 @@ class Retainer<T> {
 		retainListMutex.acquire();
 		// retain
 		if (retainListLast != null) {
-			retainListLast.listNext = this;
+			retainListLast.listNext = #if (haxe_ver < 4.2) cast this #else this #end ;
 			listPrevious = retainListLast;
 		}
-		retainListLast = this;
+		retainListLast = #if (haxe_ver < 4.2) cast this #else this #end;
 		retainedCount++;
 		retainListMutex.release();
 	}
