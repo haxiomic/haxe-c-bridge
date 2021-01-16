@@ -5,5 +5,6 @@
 	"contributors": ["haxiomic"],
 	"license": "MIT",
 	"tags": ["hxcpp", "native", "embed", "ios", "mac", "windows", "linux", "android"],
-	"url": "https://github.com/haxiomic/haxe-c-bridge"
+	"url": "https://github.com/haxiomic/haxe-c-bridge",
+	"releasenote": "First release"
 }
