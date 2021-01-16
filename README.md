@@ -11,7 +11,7 @@ Install with `haxelib install haxe-c-bridge` (or simply copy the `HaxeCBridge.hx
 Haxe-side:
 - Add `--library haxe-c-bridge` to your hxml
 - Add `-D dll_link` or `-D static_link` to your hxml to compile your haxe program into a native library binary
-- Add `@:build(HaxeCBridge.build())` to a classes containing *static* *public* functions that you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
+- Add `@:build(HaxeCBridge.build())` to classes containing *static* *public* functions that you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
 - HaxeCBridge will then generate a header file in your build output directory named after your `--main` class (however a `--main` class is not required to use HaxeCBridge)
 
 C-side:
@@ -22,7 +22,7 @@ C-side:
 
 See [test/unit](test/unit) for a complete example
 
-## Example
+## Minimal Example
 
 **Main.hx**
 ```haxe
@@ -73,6 +73,7 @@ void exampleCallback(const char* str) {
 
 // start the haxe thread
 Main_initializeHaxeThread(onHaxeException);
+// call our haxe function
 HaxeObject obj = Main_callMeFromC("hello from c", 1234, exampleCallback);
 // when we're done with our object we can tell the haxe-gc we're finished
 Main_releaseHaxeObject(obj);
@@ -86,7 +87,7 @@ C is a common language many platforms use to glue to one another. It's always be
 
 This library plugs that gap by automatically generating safe function bindings, managing the event loop and taking care of converting exposed types to be C compatible and GC-safe.
 
-A separate thread is used to host the haxe execution and the haxe event loop (so events scheduled in haxe will continue running in parallel to the rest of your native app). When calling haxe functions from C the haxe code will be executed synchronously on this haxe thread so it's safe for functions exposed to C to interact with the rest of your haxe code. You can disable haxe thread synchronization by adding `@externalThread` however this is less safe and you must then perform main thread synchronization yourself.
+A separate thread is used to host the haxe execution and the haxe event loop so events scheduled in haxe will continue running in parallel to the rest of your native app. When calling haxe functions from C, the haxe code will be executed synchronously on this haxe thread so it's safe for functions exposed to C to interact with the rest of your haxe code. You can disable haxe thread synchronization by adding `@externalThread` however this is less safe and you must then perform main thread synchronization yourself.
 
 ## Meta
 - `@HaxeCBridge.name` – Can be used on functions and classes. On classes it sets the class prefix for each generated function and on functions it sets the complete function name (overriding prefixes)

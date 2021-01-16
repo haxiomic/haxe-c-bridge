@@ -11,7 +11,7 @@
 	**Usage**
 
 	Haxe-side:
-	- Add `@:build(HaxeCBridge.build())` to a classes containing *public static* functions you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
+	- Add `@:build(HaxeCBridge.build())` to classes containing *public static* functions you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
 		- The first argument of build() sets generated C function name prefix: `build('Example')` or `build('')` for no prefix
 	- Add `-D dll_link` or `-D static_link` to compile your haxe program into a native library binary
 	- HaxeCBridge will then generate a header file in your build output directory named after your `--main` class (however a `--main` class is not required to use HaxeCBridge)
