@@ -54,7 +54,7 @@ class Main {
 
 Then run `haxe build.hxml` to compile the haxe code into a native library binary
 
-This will generate a header file: `bin/Main.h` with our haxe function exposed
+This will generate a header file: `bin/Main.h` with our haxe function exposed as:
 ```C
 HaxeObject Main_callMeFromC(const char* msg, int64_t number, function_cpp_ConstCharStar_Void callback);
 ```
