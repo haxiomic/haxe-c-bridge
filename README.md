@@ -71,14 +71,18 @@ void exampleCallback(const char* str) {
 	printf("exampleCallback(%s)\n", info);
 }
 
-// start the haxe thread
-Main_initializeHaxeThread(onHaxeException);
-// call our haxe function
-HaxeObject obj = Main_callMeFromC("hello from c", 1234, exampleCallback);
-// when we're done with our object we can tell the haxe-gc we're finished
-Main_releaseHaxeObject(obj);
-// stop the haxe thread but wait for any scheduled events to complete
-Main_stopHaxeThreadIfRunning(true);
+int main(void) {
+	// start the haxe thread
+	Main_initializeHaxeThread(onHaxeException);
+	// call our haxe function
+	HaxeObject obj = Main_callMeFromC("hello from c", 1234, exampleCallback);
+	// when we're done with our object we can tell the haxe-gc we're finished
+	Main_releaseHaxeObject(obj);
+	// stop the haxe thread but wait for any scheduled events to complete
+	Main_stopHaxeThreadIfRunning(true);
+
+	return 0;
+}
 ```
 
 ## Background
