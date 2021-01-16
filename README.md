@@ -80,7 +80,7 @@ Main_stopHaxeThreadIfRunning(true);
 
 ## Background
 
-C is a common language many platforms use to glue to one another. It's always been relatively easy to call C code from haxe using haxe C++ externs (or simply [`untyped __cpp__('c-code')`](https://haxe.org/manual/target-syntax.html)) but it's much harder to call haxe code from C: while hxcpp can generate C++ declarations with [`@:nativeGen`](https://github.com/HaxeFoundation/hxcpp/blob/master/test/extern-lib/api/HaxeApi.hx), you need to manually create adaptors for these to use with C. Additionally you have to take care to manage the haxe event loop and haxe garbage collector. 
+C is a common language many platforms use to glue to one another. It's always been relatively easy to call C code from haxe using haxe C++ externs (or simply [`untyped __cpp__('c-code')`](https://haxe.org/manual/target-syntax.html)) but it's much harder to call haxe code from C: while hxcpp can generate C++ declarations with [`@:nativeGen`](https://github.com/HaxeFoundation/hxcpp/blob/master/test/extern-lib/api/HaxeApi.hx), you need to manually create adaptors for these to use with C. Additionally you have to take care to manage the haxe event loop and interaction with the haxe garbage collector. 
 
 This library plugs that gap by automatically generating safe function bindings, managing the event loop and taking care of converting exposed types to be C compatible.
 
