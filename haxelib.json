@@ -1,7 +1,7 @@
 {
 	"name": "haxe-c-bridge",
 	"description": "Easily embed a multi-threaded haxe program within a native application via an automatically generated C header",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"contributors": ["haxiomic"],
 	"license": "MIT",
 	"tags": ["hxcpp", "native", "embed", "c-language", "bridge", "ios", "mac", "windows", "linux", "android"],
