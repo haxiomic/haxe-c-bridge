@@ -71,7 +71,7 @@ class Main {
 	static function retainerTests() @:privateAccess {
 		var r = [for (i in 0...5) new Retainer(i)];
 		Retainer.retainListMutex.acquire();
-		if (Retainer.retainedCount != 5) throw 'Expected 100';
+		if (Retainer.retainedCount != 5) throw 'Expected 5';
 		Retainer.retainListMutex.release();
 
 		// enumerate list
