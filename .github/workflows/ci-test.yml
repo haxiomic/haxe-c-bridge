@@ -24,6 +24,7 @@ jobs:
           cd test/unit/
           lix download haxe latest
           lix use haxe latest
+          lix download
       - name: "testing"
         run: |
           cd test/unit
