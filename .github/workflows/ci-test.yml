@@ -23,11 +23,14 @@ jobs:
         run: |
           cd test/unit/
           lix download haxe latest
-          lix use haxe latest
+          lix download haxe nightly
           lix download
       - name: "testing"
         run: |
           cd test/unit
+          lix use haxe latest
+          ./run.mac.sh
+          lix use haxe nightly
           ./run.mac.sh
         env:
           CI: true
