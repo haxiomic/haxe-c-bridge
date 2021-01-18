@@ -502,12 +502,7 @@ class HaxeCBridge {
 
 						HaxeCBridgeInternal::runInMainThread(Callback::run, &waitOnScheduledEvents);
 
-						{
-							hx::NativeAttach autoAttach;
-							__hxcpp_enter_gc_free_zone();
-							HaxeCBridgeInternal::threadEndSemaphore.Wait();
-							__hxcpp_exit_gc_free_zone();
-						}
+						HaxeCBridgeInternal::threadEndSemaphore.Wait();
 					}
 				}
 			}
