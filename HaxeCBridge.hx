@@ -288,11 +288,11 @@ class HaxeCBridge {
 
 			+ (if (includes.length > 0) includes.map(CPrinter.printInclude).join('\n') + '\n\n'; else '')
 			+ (if (ctx.macros.length > 0) ctx.macros.join('\n') + '\n' else '')
-			+ (if (ctx.typeDeclarations.length > 0) ctx.typeDeclarations.map(d -> CPrinter.printDeclaration(d, true)).join(';\n') + ';\n\n'; else '')
-			+ (if (ctx.supportTypeDeclarations.length > 0) ctx.supportTypeDeclarations.map(d -> CPrinter.printDeclaration(d, true)).join(';\n') + ';\n'; else '')
+			+ 'typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);\n'
+			+ (if (ctx.supportTypeDeclarations.length > 0) ctx.supportTypeDeclarations.map(d -> CPrinter.printDeclaration(d, true)).join(';\n') + ';\n\n'; else '')
+			+ (if (ctx.typeDeclarations.length > 0) ctx.typeDeclarations.map(d -> CPrinter.printDeclaration(d, true)).join(';\n') + ';\n'; else '')
 
 			+ code('
-			typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
 
 			#ifdef __cplusplus
 			extern "C" {
@@ -348,7 +348,6 @@ class HaxeCBridge {
 			#include <hx/StdLibs.h>
 			#include <hx/GC.h>
 			#include <HaxeCBridge.h>
-			#include <Retainer.h>
 			#include <assert.h>
 			#include <queue>
 			#include <utility>
@@ -508,13 +507,19 @@ class HaxeCBridge {
 			}
 
 			HXCPP_EXTERN_CLASS_ATTRIBUTES
-			void ${namespace}_releaseHaxeObject(HaxeObject obj) {
+			void ${namespace}_releaseHaxeObject(void* objPtr) {
 				struct Callback {
 					static void run(void* data) {
-						HaxeCBridge::releaseHaxeObject(Retainer((hx::Object *)data, false));
+						HaxeCBridge::releaseHaxePtr(data);
 					}
 				};
-				HaxeCBridgeInternal::runInMainThread(Callback::run, obj);
+				HaxeCBridgeInternal::runInMainThread(Callback::run, objPtr);
+			}
+
+			HXCPP_EXTERN_CLASS_ATTRIBUTES
+			void ${namespace}_releaseHaxeString(const char* strPtr) {
+				// we use the same release call for all haxe pointers
+				${namespace}_releaseHaxeObject((void*) strPtr);
 			}
 
 		')
@@ -541,7 +546,7 @@ class HaxeCBridge {
 			// type cast argument before passing to hxcpp
 			return switch rootCType {
 				case Enum(_): expr; // enum to int works with implicit cast
-				case Ident('HaxeObject'): 'Retainer((hx::Object *)$expr, false)';
+				case Ident('HaxeObject'): 'Dynamic((hx::Object *)$expr)';
 				case Ident(_), FunctionPointer(_), InlineStruct(_), Pointer(_): expr; // hxcpp auto casting works
 			}
 		}
@@ -550,7 +555,8 @@ class HaxeCBridge {
 			// cast hxcpp type to c
 			return switch rootCType {
 				case Enum(_): 'static_cast<${CPrinter.printType(cType)}>($expr)'; // need explicit cast for int -> enum
-				case Ident('HaxeObject'): '(HaxeObject)($expr.mPtr)';
+				case Ident('HaxeObject'): 'HaxeCBridge::retainHaxeObject($expr)'; // ensure object is held by the GC (until manual release)
+				case Ident('HaxeString'): 'HaxeCBridge::retainHaxeString($expr)'; // ensure string is held by the GC (until manual release)
 				case Ident(_), FunctionPointer(_), InlineStruct(_), Pointer(_): expr; // hxcpp auto casting works
 			}
 		}
@@ -983,7 +989,9 @@ class CConverterContext {
 					}
 					Ident(ident);
 				} else {
-					Context.error('Could not convert type "${TypeTools.toString(type)}" to C representation. To safely pass arbitrary haxe objects to C you can wrap them opaquely in HaxeCBridge.Retainer<T>', pos);
+					Context.error('Could not convert type "${TypeTools.toString(type)}" to C representation', pos);
+					// in future we can return the retained object pointer 
+					// getHaxeObjectCType(type);
 				}
 
 			case TFun(args, ret):
@@ -994,7 +1002,8 @@ class CConverterContext {
 				}
 
 			case TAnonymous(a):
-				Context.error("Haxe structures are not supported when exposing to C, try using an extern for a C struct instead (you may also wrapping the object opaquely in HaxeCBridge.Retainer<T>)", pos);
+				// Context.error("Haxe structures are not supported when exposing to C, try using an extern for a C struct instead", pos);
+				getHaxeObjectCType(type);
 
 			case TAbstract(_.get() => t, _):
 				var keyCType = tryConvertKeyType(type, allowNonTrivial, allowBareFnTypes, pos);
@@ -1106,7 +1115,7 @@ class CConverterContext {
 				// hxcpp will convert these automatically if primary type but not if secondary (like as argument type or pointer type)
 				case {t: {pack: [], name: "String"}}:
 					if (allowNonTrivial) {
-						Pointer(Ident("char", [Const]));
+						getHaxeStringCType(type);
 					} else {
 						Context.error('String is not supported as secondary type for C export, use cpp.ConstCharStar instead', pos);
 					}
@@ -1143,11 +1152,6 @@ class CConverterContext {
 					"FastIterator"
 				}}:
 					Context.error('cpp.$name is not supported for C export', pos);
-
-				// special type that ensures a GC reference is retained so it can be safely handled in C
-				// resolves to void*
-				case {t: {pack: [], name: 'Retainer', params: [tp]} }:
-					getHaxeObjectCType(tp.t);
 					
 				default:
 					// case {pack: [], name: "EnumValue"}: Ident
@@ -1282,12 +1286,13 @@ class CConverterContext {
 			});
 			supportDeclaredTypeIdentifiers.set(typeIdent, true);
 		}
+
 		if (!supportDeclaredFunctionIdentifiers.exists(functionIdent)) {
 			supportFunctionDeclarations.push({
 				doc: code('
 					Informs the garbage collector that object is no longer needed by the C code.
 
-					If the object has no remaining reference the garbage collector will free the associated memory (which can happen at any time in the future). It does not free the memory immediately.
+					If the object has no remaining reference the garbage collector can free the associated memory (which can happen at any time in the future). It does not free the memory immediately.
 
 					Thread-safety: can be called on any thread.
 					
@@ -1300,6 +1305,45 @@ class CConverterContext {
 			});
 			supportDeclaredFunctionIdentifiers.set(functionIdent, Context.currentPos());
 		}
+
+		return Ident(typeIdent);
+	}
+
+	function getHaxeStringCType(t: Type): CType {
+		// in the future we could specialize based on t (i.e. generating another typedef name like HaxeObject_SomeType)
+		var typeIdent = 'HaxeString';
+		var functionIdent = '${declarationPrefix}_releaseHaxeString';
+
+		if (!supportDeclaredTypeIdentifiers.exists(typeIdent)) {
+			supportTypeDeclarations.push({
+				kind: Typedef(Pointer(Ident("char", [Const])), [typeIdent]),
+				doc: code('
+					Internally haxe strings are stored as c strings. Cast to char16_t if you expect utf16 strings
+
+					When returned from a haxe function the string will prevented from being garbage collected until releaseHaxeString() is called')
+			});
+			supportDeclaredTypeIdentifiers.set(typeIdent, true);
+		}
+
+		if (!supportDeclaredFunctionIdentifiers.exists(functionIdent)) {
+			supportFunctionDeclarations.push({
+				doc: code('
+					Informs the garbage collector that the string is no longer needed by the C code.
+
+					If the object has no remaining reference the garbage collector can free the associated memory (which can happen at any time in the future). It does not free the memory immediately.
+
+					Thread-safety: can be called on any thread.
+
+					@param haxeString a handle to a haxe string returned from a haxe function'),
+				kind: Function({
+					name: functionIdent,
+					args: [{name: 'haxeString', type: Ident(typeIdent)}],
+					ret: Ident('void')
+				})
+			});
+			supportDeclaredFunctionIdentifiers.set(functionIdent, Context.currentPos());
+		}
+
 		return Ident(typeIdent);
 	}
 
@@ -1511,8 +1555,26 @@ class HaxeCBridge {
 	}
 	#end
 
-	static public function releaseHaxeObject(haxeObject: Retainer<Any>) {
-		haxeObject.release();
+	static public function retainHaxeObject(haxeObject: Dynamic): Star<cpp.Void> {
+		// need to get pointer to object
+		var ptr: Star<cpp.Void> = untyped __cpp__('{0}.mPtr', haxeObject);
+		// we can convert the ptr to int64
+		// https://stackoverflow.com/a/21250110
+		var ptrInt64: Int64 = untyped __cpp__('reinterpret_cast<int64_t>({0})', ptr);
+		Internal.gcRetainMap.set(ptrInt64, haxeObject);
+		return ptr;
+	}
+
+	static public function retainHaxeString(haxeString: String): cpp.ConstCharStar {
+		var cStrPtr: cpp.ConstCharStar = cpp.ConstCharStar.fromString(haxeString);
+		var ptrInt64: Int64 = untyped __cpp__('reinterpret_cast<int64_t>({0})', cStrPtr);
+		Internal.gcRetainMap.set(ptrInt64, haxeString);
+		return cStrPtr;
+	}
+
+	static public function releaseHaxePtr(haxePtr: Star<cpp.Void>) {
+		var ptrInt64: Int64 = untyped __cpp__('reinterpret_cast<int64_t>({0})', haxePtr);
+		Internal.gcRetainMap.remove(ptrInt64);
 	}
 
 	@:noCompletion
@@ -1545,61 +1607,57 @@ private class Internal {
 	public static var mainThreadWaitLock: Lock;
 	public static var mainThreadLoopActive: Bool = true;
 	public static var mainThreadEndIfNoPending: Bool = false;
+	public static final gcRetainMap = new Int64Map<Dynamic>();
 }
 
 /**
-	Ensures a reference is retained to a given haxe object to prevent collection by the GC until release() is called.
+	Implements an Int64 map via two Int32 maps, using the low and high parts as keys
+	we need @Aidan63's PR to land before we can use Map<Int64, Dynamic>
+	https://github.com/HaxeFoundation/hxcpp/pull/932
 **/
-@:nullSafety
-class Retainer<T> {
+@:forward.new
+abstract Int64Map<T>(Map<Int, Map<Int, T>>) {
 
-	static var retainedCount(default, null): Int64 = 0;
-	static var retainListLast: Null<Retainer<Any>> = null;
-	static var retainListMutex = new Mutex();
+	public inline function set(key: Int64, value: T) {
+		var low: Int = untyped __cpp__('{0} & 0xffffffff', key);
+		var high: Int = untyped __cpp__('{0} >> 32', key);
 
-	public final value: T;
-
-	var listPrevious: Null<Retainer<Any>> = null;
-	var listNext: Null<Retainer<Any>> = null;
-	var retained = true;
-
-	public function new(value: T) {
-		this.value = value;
-
-		retainListMutex.acquire();
-		// retain
-		if (retainListLast != null) {
-			retainListLast.listNext = #if (haxe_ver < 4.2) cast this #else this #end ;
-			listPrevious = retainListLast;
+		// low will vary faster and alias less, so use low as primary key
+		var highMap = this.get(low);
+		if (highMap == null) {
+			highMap = new Map<Int, T>();
+			this.set(low, highMap);
 		}
-		retainListLast = #if (haxe_ver < 4.2) cast this #else this #end;
-		retainedCount++;
-		retainListMutex.release();
+
+		highMap.set(high, value);
 	}
 
-	/**
-		Informs the garbage collector that an external reference is no longer required and the object in the value field may be collected (if no other haxe references remain)
+	public inline function get(key: Int64): Null<T> {
+		var low: Int = untyped __cpp__('{0} & 0xffffffff', key);
+		var high: Int = untyped __cpp__('{0} >> 32', key);
+		var highMap = this.get(low);
+		return (highMap != null) ? highMap.get(high): null;
+	}
 
-		Only call this if the value is no-longer required by C
-	**/
-	public function release() {
-		if (retained) {
-			retainListMutex.acquire();
-			// cut this item out of the list and stitch up
-			if (listPrevious != null) {
-				listPrevious.listNext = listNext;
+	public inline function remove(key: Int64): Bool {
+		var low: Int = untyped __cpp__('{0} & 0xffffffff', key);
+		var high: Int = untyped __cpp__('{0} >> 32', key);
+		var highMap = this.get(low);
+
+		return if (highMap != null) {
+			var removed = highMap.remove(high);
+			var isHighMapEmpty = true;
+			for (k in highMap.keys()) {
+				isHighMapEmpty = false;
+				break;
 			}
-			if (listNext != null) {
-				listNext.listPrevious = listPrevious;
-			} else {
-				// last item in the list
-				retainListLast = listPrevious;
+			// if the high map has no more keys we can dispose of it (so that we don't have empty maps left for unused low keys)
+			if (isHighMapEmpty) {
+				this.remove(low);
 			}
-			listNext = null;
-			listPrevious = null;
-			retained = false;
-			retainedCount--;
-			retainListMutex.release();
+			return removed;
+		} else {
+			false;
 		}
 	}
 
