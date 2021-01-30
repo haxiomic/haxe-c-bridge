@@ -1,4 +1,3 @@
-import HaxeCBridge.Retainer;
 import cpp.Callable;
 import cpp.ConstCharStar;
 import cpp.ConstStar;
@@ -29,9 +28,6 @@ class Main {
 	static function main() {
 		trace('main(): Hello from haxe ${Macro.getHaxeVersion()} and hxcp ${Macro.getHxcppVersion()}');
 		pack.ExampleClass; // make sure example class is referenced so the c api is generated
-
-		// validate retainer list behaves correctly
-		retainerTests();
 
 		function loop() {
 			staticLoopCount++;
@@ -66,48 +62,6 @@ class Main {
 
 	static public function printTime() {
 		trace(Date.now().toString());
-	}
-
-	static function retainerTests() @:privateAccess {
-		var r = [for (i in 0...5) new Retainer(i)];
-		Retainer.retainListMutex.acquire();
-		if (Retainer.retainedCount != 5) throw 'Expected 5';
-		Retainer.retainListMutex.release();
-
-		// enumerate list
-		function step(item: Retainer<Any>): Null<Retainer<Any>> {
-			return item.listPrevious;
-		}
-
-		function enumerateRetained() {
-			var values = new Array<Int>();
-			Retainer.retainListMutex.acquire();
-			var curr = Retainer.retainListLast;
-			Retainer.retainListMutex.release();
-			while(curr != null) {
-				values.push(curr.value);
-				curr = step(curr);
-			}
-			return values;
-		}
-
-		function testStr(str, expected) {
-			if (str != expected) {
-				throw 'Retainer tested failed: Expected "$expected" but got "$str"';
-			}
-		}
-
-		// test retain list looks correct
-		// remove first, then last, then a middle item
-		testStr(enumerateRetained().join(','), '4,3,2,1,0');
-		r[0].release();
-		testStr(enumerateRetained().join(','), '4,3,2,1');
-		r[4].release();
-		testStr(enumerateRetained().join(','), '3,2,1');
-		r[2].release();
-		testStr(enumerateRetained().join(','), '3,1');
-		new Retainer(5);
-		testStr(enumerateRetained().join(','), '5,3,1');
 	}
 
 }
@@ -268,17 +222,37 @@ class PublicCApi {
 		return 1;
 	}
 
-	static public function createHaxeObject() {
+	static public function createHaxeAnon() {
 		var obj = {str: 'still alive'};
-		return new Retainer(obj);
+		return obj;
 	}
-	static public function testHaxeObject(handle: Retainer<{str: String}>) {
-		var obj = handle.value;
-		if (obj == null) {
-			throw 'Object not found for handle $handle';
-		}
+
+	static public function checkHaxeAnon(obj: {str: String}) {
 		if (obj.str != 'still alive') {
 			throw 'Object str field was wrong';
+		}
+	}
+	
+	// can support arbitrary objects in the future
+	// static public function createHaxeObject() {
+	// 	var m = new Map<String, String>();
+	// 	var x: Dynamic = m;
+	// 	HaxeCBridge.retainHaxeObject(m);
+	// 	trace(x);
+	// 	return m;
+	// }
+
+	static public function createHaxeString() {
+		// return a dynamically allocated string to make sure the GC will collect it
+		var x = new StringBuf();
+		x.add('dynamically');
+		x.add(' allocated');
+		x.add(' string');
+		return x.toString();
+	}
+	static public function checkHaxeString(str: String) {
+		if (str != 'dynamically allocated string') {
+			throw 'String does not match expected (got \'${str.substr(0, 100)}\')'; // probably was garbage collected and now contains junk data
 		}
 	}
 
