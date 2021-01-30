@@ -20,7 +20,7 @@ import sys.thread.Thread;
 	<flag value="-fsanitize=address" />
 </linker>
 ')
-@:build(HaxeCBridge.build())
+@:build(HaxeCBridge.expose())
 class Main {
 
 	static var staticLoopCount: Int;
@@ -146,7 +146,7 @@ enum RegularEnum {
 	B;
 }
 
-@:build(HaxeCBridge.build(''))
+@:build(HaxeCBridge.expose(''))
 @:native('test.HxPublicApi')
 class PublicCApi {
 	/**

@@ -11,7 +11,7 @@ Install with `haxelib install haxe-c-bridge` (or simply copy the `HaxeCBridge.hx
 Haxe-side:
 - Add `--library haxe-c-bridge` to your hxml
 - Add `-D dll_link` or `-D static_link` to your hxml to compile your haxe program into a native library binary
-- Add `@:build(HaxeCBridge.build())` to classes containing *static* *public* functions that you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
+- Add `@:build(HaxeCBridge.expose())` to classes containing *static* *public* functions that you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
 - HaxeCBridge will then generate a header file in your build output directory named after your `--main` class (however a `--main` class is not required to use HaxeCBridge)
 
 C-side:
@@ -26,7 +26,7 @@ See [test/unit](test/unit) for a complete example
 
 **Main.hx**
 ```haxe
-@:build(HaxeCBridge.build())
+@:build(HaxeCBridge.expose())
 class Main {
 	static function main() {
 		trace("haxe thread started!");

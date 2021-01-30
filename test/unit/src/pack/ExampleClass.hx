@@ -1,6 +1,6 @@
 package pack;
 
-@:build(HaxeCBridge.build())
+@:build(HaxeCBridge.expose())
 @HaxeCBridge.name('ExamplePrefix')
 class ExampleClass {
 
@@ -14,7 +14,7 @@ class ExampleClass {
 
 }
 
-@:build(HaxeCBridge.build())
+@:build(HaxeCBridge.expose())
 @:nativeGen // test nativeGen doesn't interfere with c-api macro
 private class ExampleClassPrivate {
 

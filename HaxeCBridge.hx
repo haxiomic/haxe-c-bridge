@@ -11,8 +11,8 @@
 	**Usage**
 
 	Haxe-side:
-	- Add `@:build(HaxeCBridge.build())` to classes containing *public static* functions you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
-		- The first argument of build() sets generated C function name prefix: `build('Example')` or `build('')` for no prefix
+	- Add `@:build(HaxeCBridge.expose())` to classes containing *public static* functions you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
+		- The first argument of expose() sets generated C function name prefix: `expose('Example')` or `expose('')` for no prefix
 	- Add `-D dll_link` or `-D static_link` to compile your haxe program into a native library binary
 	- HaxeCBridge will then generate a header file in your build output directory named after your `--main` class (however a `--main` class is not required to use HaxeCBridge)
 		- Change the generated library name by adding `-D HaxeCBridge.name=YourLibName` to your hxml
@@ -33,7 +33,7 @@
 	#if (display || display_details || target.name != cpp)
 
 class HaxeCBridge {
-	public static function build(?namespace: String)
+	public static function expose(?namespace: String)
 		return haxe.macro.Context.getBuildFields();
 	@:noCompletion
 	static macro function runUserMain()
@@ -96,7 +96,7 @@ class HaxeCBridge {
 		pos: Position,
 	}>();
 
-	static public function build(?namespace: String) {
+	static public function expose(?namespace: String) {
 		var fields = Context.getBuildFields();
 
 		// resolve runtime HaxeCBridge class to make sure it's generated
