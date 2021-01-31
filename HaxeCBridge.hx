@@ -997,13 +997,17 @@ class CConverterContext {
 					}
 					Ident(ident);
 				} else {
-					// return an opaque pointer to this object
-					// the implementation must include the hxcpp header associated with this type for dynamic casting to work
-					var nativeName = @:privateAccess HaxeCBridge.getHxcppNativeName(t);
-					var hxcppHeaderPath = Path.join(nativeName.split('.')) + '.h';
-					requireImplementationHeader(hxcppHeaderPath, false);
-					// 'HaxeObject' c typedef
-					getHaxeObjectCType(type);
+					if (allowNonTrivial) {
+						// return an opaque pointer to this object
+						// the implementation must include the hxcpp header associated with this type for dynamic casting to work
+						var nativeName = @:privateAccess HaxeCBridge.getHxcppNativeName(t);
+						var hxcppHeaderPath = Path.join(nativeName.split('.')) + '.h';
+						requireImplementationHeader(hxcppHeaderPath, false);
+						// 'HaxeObject' c typedef
+						getHaxeObjectCType(type);
+					} else {
+						Context.error('Type ${TypeTools.toString(type)} is not supported as secondary type for C export, use HaxeCBridge.HaxeObject instead', pos);
+					}
 				}
 
 			case TFun(args, ret):
@@ -1014,8 +1018,11 @@ class CConverterContext {
 				}
 
 			case TAnonymous(a):
-				// Context.error("Haxe structures are not supported when exposing to C, try using an extern for a C struct instead", pos);
-				getHaxeObjectCType(type);
+				if (allowNonTrivial) {
+					getHaxeObjectCType(type);
+				} else {
+					Context.error('Anons are not supported as secondary type for C export, use HaxeCBridge.HaxeObject instead', pos);
+				}
 
 			case TAbstract(_.get() => t, _):
 				var keyCType = tryConvertKeyType(type, allowNonTrivial, allowBareFnTypes, pos);
@@ -1032,7 +1039,15 @@ class CConverterContext {
 						getEnumCType(type, allowNonTrivial, pos);
 					} else {
 						// follow once abstract's underling type
-						convertType(TypeTools.followWithAbstracts(type, true), allowNonTrivial, allowBareFnTypes, pos);
+
+						// check if the abstract is wrapping a key type
+						var underlyingKeyType = tryConvertKeyType(t.type, allowNonTrivial, allowBareFnTypes, pos);
+						if  (underlyingKeyType != null) {
+							underlyingKeyType;
+						} else {
+							// we cannot use t.type here because we need to account for haxe special abstract resolution behavior like multiType with Map
+							convertType(TypeTools.followWithAbstracts(type, true), allowNonTrivial, allowBareFnTypes, pos);
+						}
 					}
 				}
 			
@@ -1059,8 +1074,11 @@ class CConverterContext {
 				convertType(f(), allowNonTrivial, allowBareFnTypes, pos);
 
 			case TDynamic(t):
-				// Context.error("Any and Dynamic types are not supported when exposing to C", pos);
-				getHaxeObjectCType(type);
+				if (allowNonTrivial) {
+					getHaxeObjectCType(type);
+				} else {
+					Context.error('Any and Dynamic are not supported as secondary type for C export, use HaxeCBridge.HaxeObject instead', pos);
+				}
 			
 			case TMono(t):
 				Context.error("Explicit type is required when exposing to C", pos);
@@ -1305,7 +1323,9 @@ class CConverterContext {
 		if (!supportDeclaredTypeIdentifiers.exists(typeIdent)) {
 			supportTypeDeclarations.push({
 				kind: Typedef(Pointer(Ident('void')), [typeIdent]),
-				doc: code('When passed from haxe to C, a reference to the object is retained to prevent garbage collection. You must call releaseHaxeObject() when finished with this handle to allow collection.')
+				doc: code('
+					Represents a pointer to a haxe object.
+					When passed from haxe to C, a reference to the object is retained to prevent garbage collection. You should call releaseHaxeObject() when finished with this handle in C to allow collection.')
 			});
 			supportDeclaredTypeIdentifiers.set(typeIdent, true);
 		}
@@ -1342,8 +1362,7 @@ class CConverterContext {
 				kind: Typedef(Pointer(Ident("char", [Const])), [typeIdent]),
 				doc: code('
 					Internally haxe strings are stored as null-terminated C strings. Cast to char16_t if you expect utf16 strings.
-
-					When passed from haxe to C, a reference to the object is retained to prevent garbage collection. You must call releaseHaxeString() when finished with this handle to allow collection.')
+					When passed from haxe to C, a reference to the object is retained to prevent garbage collection. You should call releaseHaxeString() when finished with this handle to allow collection.')
 			});
 			supportDeclaredTypeIdentifiers.set(typeIdent, true);
 		}
@@ -1481,6 +1500,13 @@ import sys.thread.Lock;
 import sys.thread.Mutex;
 import sys.thread.Thread;
 
+abstract HaxeObject(Star<cpp.Void>) from Star<cpp.Void> to Star<cpp.Void> {
+	@:to
+	public function toDynamic(): Dynamic {
+		return untyped __cpp__('Dynamic((hx::Object *){0})', this);
+	}
+}
+
 @:nativeGen
 @:keep
 @:noCompletion
@@ -1578,7 +1604,8 @@ class HaxeCBridge {
 	}
 	#end
 
-	static public function retainHaxeObject(haxeObject: Dynamic): Star<cpp.Void> {
+	@:noCompletion
+	static public function retainHaxeObject(haxeObject: Dynamic): HaxeObject {
 		// need to get pointer to object
 		var ptr: Star<cpp.Void> = untyped __cpp__('{0}.mPtr', haxeObject);
 		// we can convert the ptr to int64
@@ -1588,6 +1615,7 @@ class HaxeCBridge {
 		return ptr;
 	}
 
+	@:noCompletion
 	static public function retainHaxeString(haxeString: String): cpp.ConstCharStar {
 		var cStrPtr: cpp.ConstCharStar = cpp.ConstCharStar.fromString(haxeString);
 		var ptrInt64: Int64 = untyped __cpp__('reinterpret_cast<int64_t>({0})', cStrPtr);
