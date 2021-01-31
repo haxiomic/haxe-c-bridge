@@ -254,8 +254,8 @@ class PublicCApi {
 	}
 
 	static public function checkCustomType(x: CustomType) {
-		if (x.magicNumber == 99234234) {
-			throw 'Expected CustomType';
+		if (x.magicNumber != 99234234) {
+			throw 'Expected CustomType (got ${x.magicNumber})';
 		}
 	}
 
