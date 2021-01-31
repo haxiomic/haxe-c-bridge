@@ -17,7 +17,7 @@
 // the thread will continue running
 void onHaxeException(const char* info) {
 	logf("onHaxeException: \"%s\"", info);
-	assert(strcmp(info, "example exception") == 0);
+	assert(strcmp(info, "example exception") == 0); // an exception with this string is expected (all others are unexpected!)
 	HaxeLib_stopHaxeThreadIfRunning(true); // (in a real app, you'd want to use `false` here so the thread exits immediately, but here we let it wait for pending events to complete)
 	log("-> thread stop requested (waitOnScheduledEvents = true)");
 }
@@ -116,20 +116,36 @@ int main(void) {
 	// enum
 	assert(HaxeLib_enumTypes(B, "AAA", AAA) == BBB);
 
-	// haxe object
+	// haxe objects and strings
 	for (int i = 0; i < 100; i++) {
-		HaxeObject obj = HaxeLib_createHaxeObject();
-		// run a major GC to make sure obj would be collected if not protected
+		// // run a major GC to make sure obj would be collected if not protected
 		HaxeLib_Main_hxcppGcRun(true);
-		HaxeLib_testHaxeObject(obj);
+		HaxeObject obj = HaxeLib_createHaxeAnon();
+		HaxeLib_checkHaxeAnon(obj);
 		HaxeLib_releaseHaxeObject(obj);
-		/*
-		To validate haxe object release worked, uncomment this with ASan enabled; should crash :)
+
+		const char* haxeStr = HaxeLib_createHaxeString();
+		HaxeLib_checkHaxeString(haxeStr);
+		HaxeLib_releaseHaxeString(haxeStr);
+
+		HaxeObject map = HaxeLib_createHaxeMap();
+		HaxeLib_checkHaxeMap(map);
+		HaxeLib_releaseHaxeObject(map);
+
+		HaxeObject c = HaxeLib_createCustomType();
+		HaxeLib_checkCustomType(c);
+		HaxeLib_releaseHaxeObject(c);
+
+		#ifdef VALIDATE_RETAIN
+		// To validate haxe object release worked, uncomment this with ASan enabled; should crash :)
 		HaxeLib_add(1,1); // < executing another call on the main thread first ensures the call to release executed (as that call is async)
 		HaxeLib_Main_hxcppGcRun(true);
-		HaxeLib_testHaxeObject(obj);
-		*/
+		HaxeLib_checkHaxeString(haxeStr); // expected to throw an exception because the string now contains junk
+		HaxeLib_checkHaxeObject(obj); // expected to trigger asan crash
+		HaxeLib_checkHaxeMap(map);
+		#endif
 	}
+
 
 	// sleep one second and verify the haxe thread event loop continued to run
 	log("sleeping 1s to let the haxe thread event loop run");

@@ -11,7 +11,19 @@
 #include <stdint.h>
 #include "MessagePayload.h"
 
-typedef const char* HaxeLib_NonTrivialAlias;
+typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
+/**
+ * Internally haxe strings are stored as null-terminated C strings. Cast to char16_t if you expect utf16 strings.
+ * 
+ * When passed from haxe to C, a reference to the object is retained to prevent garbage collection. You must call releaseHaxeString() when finished with this handle to allow collection.
+ */
+typedef const char* HaxeString;
+/**
+ * When passed from haxe to C, a reference to the object is retained to prevent garbage collection. You must call releaseHaxeObject() when finished with this handle to allow collection.
+ */
+typedef void* HaxeObject;
+
+typedef HaxeString HaxeLib_NonTrivialAlias;
 enum HaxeLib_IntEnum2 {
 	AAA = 9,
 	BBB = 10,
@@ -32,9 +44,6 @@ enum HaxeLib_IntEnumAbstract {
 	A = 0,
 	B = 1
 };
-
-typedef void* HaxeObject;
-typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,9 +75,20 @@ extern "C" {
 	void HaxeLib_stopHaxeThreadIfRunning(bool waitOnScheduledEvents);
 
 	/**
+	 * Informs the garbage collector that the string is no longer needed by the C code.
+	 * 
+	 * If the object has no remaining reference the garbage collector can free the associated memory (which can happen at any time in the future). It does not free the memory immediately.
+	 * 
+	 * Thread-safety: can be called on any thread.
+	 * 
+	 * @param haxeString a handle to a haxe string returned from a haxe function
+	 */
+	void HaxeLib_releaseHaxeString(HaxeString haxeString);
+
+	/**
 	 * Informs the garbage collector that object is no longer needed by the C code.
 	 * 
-	 * If the object has no remaining reference the garbage collector will free the associated memory (which can happen at any time in the future). It does not free the memory immediately.
+	 * If the object has no remaining reference the garbage collector can free the associated memory (which can happen at any time in the future). It does not free the memory immediately.
 	 * 
 	 * Thread-safety: can be called on any thread.
 	 * 					
@@ -82,7 +102,7 @@ extern "C" {
 	 * @param b some string
 	 * @returns void
 	 */
-	void HaxeLib_voidRtn(int a, const char* b, HaxeLib_NonTrivialAlias c, HaxeLib_EnumAlias e);
+	void HaxeLib_voidRtn(int a, HaxeString b, HaxeLib_NonTrivialAlias c, HaxeLib_EnumAlias e);
 
 	void HaxeNoArgsNoReturn();
 
@@ -128,9 +148,21 @@ extern "C" {
 	 */
 	uint64_t HaxeLib_cppCoreTypes2(int i, double f, float s, signed char i8, short i16, int i32, int64_t i64, uint64_t ui64, const char* str);
 
-	HaxeObject HaxeLib_createHaxeObject();
+	HaxeObject HaxeLib_createHaxeAnon();
 
-	void HaxeLib_testHaxeObject(HaxeObject handle);
+	void HaxeLib_checkHaxeAnon(HaxeObject obj);
+
+	HaxeObject HaxeLib_createHaxeMap();
+
+	void HaxeLib_checkHaxeMap(HaxeObject m);
+
+	HaxeObject HaxeLib_createCustomType();
+
+	void HaxeLib_checkCustomType(HaxeObject x);
+
+	HaxeString HaxeLib_createHaxeString();
+
+	void HaxeLib_checkHaxeString(HaxeString str);
 
 	void HaxeLib_throwException();
 
