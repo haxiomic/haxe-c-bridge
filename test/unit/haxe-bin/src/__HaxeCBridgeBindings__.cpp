@@ -19,6 +19,8 @@
 #include <Main.h>
 #include <pack/_ExampleClass/ExampleClassPrivate.h>
 #include <pack/ExampleClass.h>
+#include <haxe/ds/StringMap.h>
+#include <_Main/CustomType.h>
 
 namespace HaxeCBridgeInternal {
 	std::atomic<bool> threadStarted = { false };
@@ -721,6 +723,146 @@ void HaxeLib_checkHaxeAnon(HaxeObject a0) {
 	Data data = { {a0} };
 
 	// queue a callback to execute checkHaxeAnon() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+HaxeObject HaxeLib_createHaxeMap() {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return HaxeCBridge::retainHaxeObject(test::HxPublicApi_obj::createHaxeMap());
+	}
+	struct Data {
+		struct {} args;
+		HxSemaphore lock;
+		HaxeObject ret;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				data->ret = HaxeCBridge::retainHaxeObject(test::HxPublicApi_obj::createHaxeMap());
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {} };
+
+	// queue a callback to execute createHaxeMap() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+	return data.ret;
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+void HaxeLib_checkHaxeMap(HaxeObject a0) {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return test::HxPublicApi_obj::checkHaxeMap(Dynamic((hx::Object *)a0));
+	}
+	struct Data {
+		struct {HaxeObject a0;} args;
+		HxSemaphore lock;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				test::HxPublicApi_obj::checkHaxeMap(Dynamic((hx::Object *)data->args.a0));
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {a0} };
+
+	// queue a callback to execute checkHaxeMap() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+HaxeObject HaxeLib_createCustomType() {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return HaxeCBridge::retainHaxeObject(test::HxPublicApi_obj::createCustomType());
+	}
+	struct Data {
+		struct {} args;
+		HxSemaphore lock;
+		HaxeObject ret;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				data->ret = HaxeCBridge::retainHaxeObject(test::HxPublicApi_obj::createCustomType());
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {} };
+
+	// queue a callback to execute createCustomType() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+	return data.ret;
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+void HaxeLib_checkCustomType(HaxeObject a0) {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return test::HxPublicApi_obj::checkCustomType(Dynamic((hx::Object *)a0));
+	}
+	struct Data {
+		struct {HaxeObject a0;} args;
+		HxSemaphore lock;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				test::HxPublicApi_obj::checkCustomType(Dynamic((hx::Object *)data->args.a0));
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {a0} };
+
+	// queue a callback to execute checkCustomType() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
 	data.lock.Wait();
 }

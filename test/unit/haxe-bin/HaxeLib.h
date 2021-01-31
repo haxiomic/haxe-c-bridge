@@ -13,11 +13,14 @@
 
 typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
 /**
- * Internally haxe strings are stored as c strings. Cast to char16_t if you expect utf16 strings
+ * Internally haxe strings are stored as null-terminated C strings. Cast to char16_t if you expect utf16 strings.
  * 
- * When returned from a haxe function the string will prevented from being garbage collected until releaseHaxeString() is called
+ * When passed from haxe to C, a reference to the object is retained to prevent garbage collection. You must call releaseHaxeString() when finished with this handle to allow collection.
  */
 typedef const char* HaxeString;
+/**
+ * When passed from haxe to C, a reference to the object is retained to prevent garbage collection. You must call releaseHaxeObject() when finished with this handle to allow collection.
+ */
 typedef void* HaxeObject;
 
 typedef HaxeString HaxeLib_NonTrivialAlias;
@@ -148,6 +151,14 @@ extern "C" {
 	HaxeObject HaxeLib_createHaxeAnon();
 
 	void HaxeLib_checkHaxeAnon(HaxeObject obj);
+
+	HaxeObject HaxeLib_createHaxeMap();
+
+	void HaxeLib_checkHaxeMap(HaxeObject m);
+
+	HaxeObject HaxeLib_createCustomType();
+
+	void HaxeLib_checkCustomType(HaxeObject x);
 
 	HaxeString HaxeLib_createHaxeString();
 

@@ -234,13 +234,30 @@ class PublicCApi {
 	}
 	
 	// can support arbitrary objects in the future
-	// static public function createHaxeObject() {
-	// 	var m = new Map<String, String>();
-	// 	var x: Dynamic = m;
-	// 	HaxeCBridge.retainHaxeObject(m);
-	// 	trace(x);
-	// 	return m;
-	// }
+	static public function createHaxeMap() {
+		var m = new Map<String, haxe.ds.List<String>>();
+		var l = new List();
+		l.add('yey');
+		m.set('example', l);
+		return m;
+	}
+
+	static public function checkHaxeMap(m: Map<String, haxe.ds.List<String>>) {
+		var l = m.get('example');
+		if (l.first() != 'yey') {
+			throw 'Expected yey, got $l';
+		}
+	}
+
+	static public function createCustomType() {
+		return new CustomType();
+	}
+
+	static public function checkCustomType(x: CustomType) {
+		if (!Std.isOfType(x, CustomType)) {
+			throw 'Expected CustomType';
+		}
+	}
 
 	static public function createHaxeString() {
 		// return a dynamically allocated string to make sure the GC will collect it
@@ -271,6 +288,9 @@ class PublicCApi {
 	// static public function typeParam<T>(x: T): T return x;
 	// optional not supported; all args are required when calling from C
 	// static public function optional(?single: Single): Void { }
-	// static public function map() return new Map(); // no way to represent in haxe (without using Retainer)
 
+}
+
+private class CustomType {
+	public function new() {}
 }

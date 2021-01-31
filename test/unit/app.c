@@ -128,12 +128,21 @@ int main(void) {
 		HaxeLib_checkHaxeString(haxeStr);
 		HaxeLib_releaseHaxeString(haxeStr);
 
+		HaxeObject map = HaxeLib_createHaxeMap();
+		HaxeLib_checkHaxeMap(map);
+		HaxeLib_releaseHaxeObject(map);
+
+		HaxeObject c = HaxeLib_createCustomType();
+		HaxeLib_checkCustomType(c);
+		HaxeLib_releaseHaxeObject(c);
+
 		#ifdef VALIDATE_RETAIN
 		// To validate haxe object release worked, uncomment this with ASan enabled; should crash :)
 		HaxeLib_add(1,1); // < executing another call on the main thread first ensures the call to release executed (as that call is async)
 		HaxeLib_Main_hxcppGcRun(true);
 		HaxeLib_checkHaxeString(haxeStr); // expected to throw an exception because the string now contains junk
 		HaxeLib_checkHaxeObject(obj); // expected to trigger asan crash
+		HaxeLib_checkHaxeMap(map);
 		#endif
 	}
 
