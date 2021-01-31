@@ -232,6 +232,14 @@ class PublicCApi {
 			throw 'Object str field was wrong';
 		}
 	}
+
+	static public function checkAnonFromPointer(haxeObject: HaxeCBridge.HaxeObject) {
+		// convert the raw void* pointer into a haxe object
+		var obj: {str: String} = haxeObject;
+		if (obj.str != 'still alive') {
+			throw 'Object str field was wrong';
+		}
+	}
 	
 	// can support arbitrary objects in the future
 	static public function createHaxeMap() {

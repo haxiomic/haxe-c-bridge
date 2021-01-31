@@ -122,6 +122,7 @@ int main(void) {
 		HaxeLib_Main_hxcppGcRun(true);
 		HaxeObject obj = HaxeLib_createHaxeAnon();
 		HaxeLib_checkHaxeAnon(obj);
+		HaxeLib_checkAnonFromPointer(obj);
 		HaxeLib_releaseHaxeObject(obj);
 
 		const char* haxeStr = HaxeLib_createHaxeString();
