@@ -1638,8 +1638,11 @@ private class Internal {
 	we need @Aidan63's PR to land before we can use Map<Int64, Dynamic>
 	https://github.com/HaxeFoundation/hxcpp/pull/932
 **/
-@:forward.new
 abstract Int64Map<T>(Map<Int, Map<Int, T>>) {
+
+	public function new() {
+		this = new Map<Int, Map<Int, T>>();
+	}
 
 	public inline function set(key: Int64, value: T) {
 		var low: Int = low32(key);
