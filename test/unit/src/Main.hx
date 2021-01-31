@@ -254,7 +254,7 @@ class PublicCApi {
 	}
 
 	static public function checkCustomType(x: CustomType) {
-		if (!Std.isOfType(x, CustomType)) {
+		if (x.magicNumber == 99234234) {
 			throw 'Expected CustomType';
 		}
 	}
@@ -292,5 +292,6 @@ class PublicCApi {
 }
 
 private class CustomType {
+	public final magicNumber = 99234234;
 	public function new() {}
 }
