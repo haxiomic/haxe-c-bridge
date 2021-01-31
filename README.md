@@ -35,11 +35,13 @@ class Main {
 	static public function callMeFromC(msg: String, number: cpp.Int64, callback: cpp.Callable<cpp.ConstCharStar->Void>) {
 		// execute a C callback
 		callback('Calling from haxe: "$msg", $number');
-		// wrap our object with Retainer when passing to C so that the haxe GC doesn't collect it until we tell haxe we're done with it
-		return new HaxeCBridge.Retainer({
+		// we can return arbitrary types to C, if they cannot be converted into a native C type they will be represented as a void* named HaxeObject
+		// before passing to C, a reference to the instance will be retained to prevent collection by the GC
+		// when finished with the object in C, you can call releaseHaxeObject() to re-enable collection
+		return {
 			msg: msg,
 			number: number
-		});
+		};
 	}
 }
 ```
