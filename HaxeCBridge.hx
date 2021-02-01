@@ -87,8 +87,10 @@ class HaxeCBridge {
 	});
 	static final functionInfo = new Map<String, {
 		kind: FunctionInfoKind,
-		hxcppName: String,
+		hxcppClass: String,
+		hxcppFunctionName: String,
 		field: ClassField,
+		tfunc: TFunc,
 		rootCTypes: {
 			args: Array<CType>,
 			ret: CType
@@ -250,14 +252,18 @@ class HaxeCBridge {
 						return tmpCtx.convertType(t, true, true, f.pos);
 					}
 
+					var hxcppClass = nativeHxcppName.split('.').join('::');
+
 					// store useful information about this function that we can use when generating the implementation
 					functionInfo.set(cFuncName, {
 						kind: kind,
-						hxcppName: nativeHxcppName.split('.').join('::') + '::' + switch kind {
+						hxcppClass: nativeName,
+						hxcppFunctionName: hxcppClass + '::' + switch kind {
 							case Constructor: '__new';
 							case Static | Member: f.name;
 						},
 						field: f,
+						tfunc: tfunc, 
 						rootCTypes: {
 							args: functionDescriptor.args.map(a -> getRootCType(a.v.t)),
 							ret: getRootCType(functionDescriptor.t)
@@ -606,15 +612,15 @@ class HaxeCBridge {
 		}
 
 		inline function callWithArgs(argNames: Array<String>) {
-			var callPath = switch haxeFunction.kind {
-				case Constructor | Static: haxeFunction.hxcppName;
-				case Member: 'instance->${haxeFunction.field.name}';
+			var callExpr = switch haxeFunction.kind {
+				case Constructor | Static:
+					'${haxeFunction.hxcppFunctionName}(${argNames.mapi((i, arg) -> castC2Cpp(arg, haxeFunction.rootCTypes.args[i])).join(', ')})';
+				case Member:
+					var a0Name = argNames[0];
+					var argNames = argNames.slice(1);
+					var argCTypes = haxeFunction.rootCTypes.args.slice(1);
+					'(${haxeFunction.hxcppClass}((hx::Object *)$a0Name, true))->${haxeFunction.field.name}(${argNames.mapi((i, arg) -> castC2Cpp(arg, argCTypes[i])).join(', ')})';
 			}
-			var callExpr = '$callPath(${
-				argNames.mapi((i, arg) -> {
-					castC2Cpp(arg, haxeFunction.rootCTypes.args[i]);
-				}).join(', ')
-			})';
 
 			return if (hasReturnValue) {
 				castCpp2C(callExpr, signature.ret, haxeFunction.rootCTypes.ret);
