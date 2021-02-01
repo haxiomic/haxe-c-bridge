@@ -1,5 +1,9 @@
+class Base {
+	public function overrideMe(): String throw 'should be overridden';
+}
+
 @:build(HaxeCBridge.expose())
-class Instance {
+class Instance extends Base {
 
 	final number = 12345678;
 	final str: String;
@@ -14,6 +18,10 @@ class Instance {
 
 	public function methodAdd(a: Int, b: Int) {
 		return a + b;
+	}
+
+	override public function overrideMe() {
+		return str;
 	}
 
 	function privateMethod() {

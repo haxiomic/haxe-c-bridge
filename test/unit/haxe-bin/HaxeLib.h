@@ -184,6 +184,16 @@ extern "C" {
 
 	int ExamplePrefix_example();
 
+	HaxeObject HaxeLib_Instance_new(HaxeString exampleArg);
+
+	void HaxeLib_Instance_methodNoArgs(HaxeObject instance);
+
+	int HaxeLib_Instance_methodAdd(HaxeObject instance, int a, int b);
+
+	HaxeString HaxeLib_Instance_overrideMe(HaxeObject instance);
+
+	void HaxeLib_Instance_staticMethod();
+
 #ifdef __cplusplus
 }
 #endif

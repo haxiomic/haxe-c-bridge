@@ -137,16 +137,23 @@ int main(void) {
 		HaxeLib_checkCustomType(c);
 		HaxeLib_releaseHaxeObject(c);
 
-		#ifdef VALIDATE_RETAIN
+		// instance test
+		HaxeObject* instance = HaxeLib_Instance_new("new from C");
+		HaxeLib_Instance_methodNoArgs(instance);
+		assert(HaxeLib_Instance_methodAdd(instance, 5, 6) == 11);
+		assert(strcmp(HaxeLib_Instance_overrideMe(instance), "new from C") == 0);
+		HaxeLib_releaseHaxeObject(instance);
+
+		#ifdef VALIDATE_RETAIN_CRASH
 		// To validate haxe object release worked, uncomment this with ASan enabled; should crash :)
 		HaxeLib_add(1,1); // < executing another call on the main thread first ensures the call to release executed (as that call is async)
 		HaxeLib_Main_hxcppGcRun(true);
 		HaxeLib_checkHaxeString(haxeStr); // expected to throw an exception because the string now contains junk
 		HaxeLib_checkHaxeObject(obj); // expected to trigger asan crash
 		HaxeLib_checkHaxeMap(map);
+		HaxeLib_Instance_methodNoArgs(instance); // asan crash
 		#endif
 	}
-
 
 	// sleep one second and verify the haxe thread event loop continued to run
 	log("sleeping 1s to let the haxe thread event loop run");

@@ -16,11 +16,12 @@
 #include "../HaxeLib.h"
 
 #include <test/HxPublicApi.h>
+#include <haxe/ds/StringMap.h>
+#include <_Main/CustomType.h>
 #include <Main.h>
 #include <pack/_ExampleClass/ExampleClassPrivate.h>
 #include <pack/ExampleClass.h>
-#include <haxe/ds/StringMap.h>
-#include <_Main/CustomType.h>
+#include <Instance.h>
 
 namespace HaxeCBridgeInternal {
 	std::atomic<bool> threadStarted = { false };
@@ -1255,5 +1256,181 @@ int ExamplePrefix_example() {
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
 	data.lock.Wait();
 	return data.ret;
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+HaxeObject HaxeLib_Instance_new(HaxeString a0) {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return HaxeCBridge::retainHaxeObject(Instance_obj::__new(a0));
+	}
+	struct Data {
+		struct {HaxeString a0;} args;
+		HxSemaphore lock;
+		HaxeObject ret;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				data->ret = HaxeCBridge::retainHaxeObject(Instance_obj::__new(data->args.a0));
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {a0} };
+
+	// queue a callback to execute new() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+	return data.ret;
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+void HaxeLib_Instance_methodNoArgs(HaxeObject a0) {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return (Instance((hx::Object *)a0, true))->methodNoArgs();
+	}
+	struct Data {
+		struct {HaxeObject a0;} args;
+		HxSemaphore lock;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				(Instance((hx::Object *)data->args.a0, true))->methodNoArgs();
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {a0} };
+
+	// queue a callback to execute methodNoArgs() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+int HaxeLib_Instance_methodAdd(HaxeObject a0, int a1, int a2) {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return (Instance((hx::Object *)a0, true))->methodAdd(a1, a2);
+	}
+	struct Data {
+		struct {HaxeObject a0; int a1; int a2;} args;
+		HxSemaphore lock;
+		int ret;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				data->ret = (Instance((hx::Object *)data->args.a0, true))->methodAdd(data->args.a1, data->args.a2);
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {a0, a1, a2} };
+
+	// queue a callback to execute methodAdd() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+	return data.ret;
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+HaxeString HaxeLib_Instance_overrideMe(HaxeObject a0) {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return HaxeCBridge::retainHaxeString((Instance((hx::Object *)a0, true))->overrideMe());
+	}
+	struct Data {
+		struct {HaxeObject a0;} args;
+		HxSemaphore lock;
+		HaxeString ret;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				data->ret = HaxeCBridge::retainHaxeString((Instance((hx::Object *)data->args.a0, true))->overrideMe());
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {a0} };
+
+	// queue a callback to execute overrideMe() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+	return data.ret;
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+void HaxeLib_Instance_staticMethod() {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return Instance_obj::staticMethod();
+	}
+	struct Data {
+		struct {} args;
+		HxSemaphore lock;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				Instance_obj::staticMethod();
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {} };
+
+	// queue a callback to execute staticMethod() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
 }
 
