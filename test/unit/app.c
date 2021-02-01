@@ -157,6 +157,9 @@ int main(void) {
 		#endif
 	}
 
+	// can we pass NULL for an object?
+	HaxeLib_checkNull(NULL, 0);
+
 	// sleep one second and verify the haxe thread event loop continued to run
 	log("sleeping 1s to let the haxe thread event loop run");
 	sleep(1);

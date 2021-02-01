@@ -258,6 +258,12 @@ class PublicCApi {
 		}
 	}
 
+	static public function checkNull(m: Null<{example: String}>, f: Null<Float>) {
+		if (m != null) {
+			throw 'Expected null';
+		}
+	}
+
 	static public function createCustomType() {
 		return new CustomType();
 	}

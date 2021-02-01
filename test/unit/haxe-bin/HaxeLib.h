@@ -158,6 +158,8 @@ extern "C" {
 
 	void HaxeLib_checkHaxeMap(HaxeObject m);
 
+	void HaxeLib_checkNull(HaxeObject m, double f);
+
 	HaxeObject HaxeLib_createCustomType();
 
 	void HaxeLib_checkCustomType(HaxeObject x);

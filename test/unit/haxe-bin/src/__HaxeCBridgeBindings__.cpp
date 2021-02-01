@@ -833,6 +833,40 @@ void HaxeLib_checkHaxeMap(HaxeObject a0) {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
+void HaxeLib_checkNull(HaxeObject a0, double a1) {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return test::HxPublicApi_obj::checkNull(Dynamic((hx::Object *)a0), a1);
+	}
+	struct Data {
+		struct {HaxeObject a0; double a1;} args;
+		HxSemaphore lock;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				test::HxPublicApi_obj::checkNull(Dynamic((hx::Object *)data->args.a0), data->args.a1);
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {a0, a1} };
+
+	// queue a callback to execute checkNull() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
 HaxeObject HaxeLib_createCustomType() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return HaxeCBridge::retainHaxeObject(test::HxPublicApi_obj::createCustomType());
