@@ -1500,7 +1500,7 @@ import sys.thread.Lock;
 import sys.thread.Mutex;
 import sys.thread.Thread;
 
-abstract HaxeObject(Star<cpp.Void>) from Star<cpp.Void> to Star<cpp.Void> {
+abstract HaxeObject(cpp.RawPointer<cpp.Void>) from cpp.RawPointer<cpp.Void> to cpp.RawPointer<cpp.Void> {
 	@:to
 	public function toDynamic(): Dynamic {
 		return untyped __cpp__('Dynamic((hx::Object *){0})', this);
@@ -1607,7 +1607,7 @@ class HaxeCBridge {
 	@:noCompletion
 	static public function retainHaxeObject(haxeObject: Dynamic): HaxeObject {
 		// need to get pointer to object
-		var ptr: Star<cpp.Void> = untyped __cpp__('{0}.mPtr', haxeObject);
+		var ptr: cpp.RawPointer<cpp.Void> = untyped __cpp__('{0}.mPtr', haxeObject);
 		// we can convert the ptr to int64
 		// https://stackoverflow.com/a/21250110
 		var ptrInt64: Int64 = untyped __cpp__('reinterpret_cast<int64_t>({0})', ptr);
