@@ -1,6 +1,6 @@
 # Haxe C Bridge
 
-HaxeCBridge is a `@:build` macro that enables calling haxe code from C by exposing static functions via an automatically generated C header. This makes it possible to build your user interfaces using native platform tools (like Swift and Java) and call into haxe code for the main app work like rendering
+HaxeCBridge is a `@:build` macro that enables calling haxe code from C by exposing classes via an automatically generated C header. This makes it possible to build your user interfaces using native platform tools (like Swift and Java) and call into haxe code for the main app work like rendering
 
 **Requires haxe 4.0 or newer and hxcpp**
 
@@ -11,7 +11,7 @@ Install with `haxelib install haxe-c-bridge` (or simply copy the `HaxeCBridge.hx
 Haxe-side:
 - Add `--library haxe-c-bridge` to your hxml
 - Add `-D dll_link` or `-D static_link` to your hxml to compile your haxe program into a native library binary
-- Add `@:build(HaxeCBridge.expose())` to classes containing *static* *public* functions that you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
+- Add `@:build(HaxeCBridge.expose())` to classes that you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
 - HaxeCBridge will then generate a header file in your build output directory named after your `--main` class (however a `--main` class is not required to use HaxeCBridge)
 
 C-side:
@@ -26,23 +26,32 @@ See [test/unit](test/unit) for a complete example
 
 **Main.hx**
 ```haxe
-@:build(HaxeCBridge.expose())
 class Main {
 	static function main() {
 		trace("haxe thread started!");
 	}
+}
 
-	static public function callMeFromC(msg: String, number: cpp.Int64, callback: cpp.Callable<cpp.ConstCharStar->Void>) {
-		// execute a C callback
-		callback('Calling from haxe: "$msg", $number');
-		// we can return arbitrary types to C, if they cannot be converted into a native C type they will be represented as a void* named HaxeObject
-		// before passing to C, a reference to the instance will be retained to prevent collection by the GC
-		// when finished with the object in C, you can call releaseHaxeObject() to re-enable collection
-		return {
-			msg: msg,
-			number: number
-		};
+@:build(HaxeCBridge.expose())
+class UseMeFromC {
+
+	final callback: (num: Int) -> Void;
+
+	// to expose haxe callbacks to C we wrap them in cpp.Callback<T>
+	public function new(exampleCallback: cpp.Callable<(num: Int) -> Void>) {
+		callback = (num) -> exampleCallback(num);
 	}
+
+	public function add(a: Int, b: Int) {
+		var result = a + b;
+		callback(result);
+		return result;
+	}
+
+	static public function exampleStaticFunction() {
+		return "here's a string from haxe! In C this will be represented as a const char*. When passing haxe object to C, the object will be retained so it's not garbage collected while it's being used in C. When finished with haxe objects, you can call releaseHaxeString() or releaseHaxeObject()";
+	}
+
 }
 ```
 
@@ -58,7 +67,9 @@ Then run `haxe build.hxml` to compile the haxe code into a native library binary
 
 This will generate a header file: `bin/Main.h` with our haxe function exposed as:
 ```C
-HaxeObject Main_callMeFromC(const char* msg, int64_t number, function_cpp_ConstCharStar_Void callback);
+HaxeObject Main_UseMeFromC_new(function_Int_Void exampleCallback);
+int Main_UseMeFromC_add(HaxeObject instance, int a, int b);
+HaxeString Main_UseMeFromC_exampleStaticFunction();
 ```
 
 We can use our function from C like so:
@@ -69,17 +80,26 @@ void onHaxeException(const char* info) {
 	Main_stopHaxeThreadIfRunning(false);
 }
 
-void exampleCallback(const char* str) {
-	printf("exampleCallback(%s)\n", info);
+void exampleCallback(int num) {
+	printf("exampleCallback(%d)\n", num);
 }
 
 int main(void) {
 	// start the haxe thread
 	Main_initializeHaxeThread(onHaxeException);
-	// call our haxe function
-	HaxeObject obj = Main_callMeFromC("hello from c", 1234, exampleCallback);
+
+	// create an instance of our haxe class
+	HaxeObject instance = Main_UseMeFromC_new("hello from c", 1234, exampleCallback);
+	// to call members of instance, we pass the instance in as the first argument
+	int result = Main_UseMeFromC_add(instance, 1, 2);
+	Main_releaseHaxeObject(instance);
+
+	// call a static function
+	HaxeString cStr = Main_UseMeFromC_exampleStaticFunction();
+	printf("%s\n", cStr);
+	Main_releaseHaxeString(cStr);
+
 	// when we're done with our object we can tell the haxe-gc we're finished
-	Main_releaseHaxeObject(obj);
 	// stop the haxe thread but wait for any scheduled events to complete
 	Main_stopHaxeThreadIfRunning(true);
 
