@@ -1,6 +1,7 @@
 .haxelib/
 
 app
+app.dSYM/
 
 # ignore all execept the generate files
 haxe-bin/*
