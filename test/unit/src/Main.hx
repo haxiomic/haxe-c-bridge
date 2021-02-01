@@ -234,10 +234,9 @@ class PublicCApi {
 		}
 	}
 
-	static public function checkAnonFromPointer(haxeObject: HaxeCBridge.HaxeObject) {
+	static public function checkAnonFromPointer(haxeObject: HaxeCBridge.HaxeObject<{str: String}>) {
 		// convert the raw void* pointer into a haxe object
-		var obj: {str: String} = haxeObject;
-		if (obj.str != 'still alive') {
+		if (haxeObject.value.str != 'still alive') {
 			throw 'Object str field was wrong';
 		}
 	}
@@ -288,6 +287,7 @@ class PublicCApi {
 
 	// the following should be disallowed at compile-time
 	// static public function nonTrivialAlias(a: NonTrivialAlias, b: Star<NonTrivialAlias>): Void { } // fail because `Star<NonTrivialAlias>`
+	// static public function nonTrivialAlias2(a: Star<Map<String, String>>): Void { } // fail because `Star<Map<String, String>>`
 	// static public function haxeCallbacks(voidVoid: () -> Void, intString: (a: Int) -> String): Void { }
 	// static public function reference(ref: cpp.Reference<Int>): Void { }
 	// static public function anon(a: {f1: Star<cpp.Void>, ?optF2: Float}): Void { }
