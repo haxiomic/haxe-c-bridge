@@ -89,7 +89,7 @@ int main(void) {
 	Main_initializeHaxeThread(onHaxeException);
 
 	// create an instance of our haxe class
-	HaxeObject instance = Main_UseMeFromC_new("hello from c", 1234, exampleCallback);
+	HaxeObject instance = Main_UseMeFromC_new(exampleCallback);
 	// to call members of instance, we pass the instance in as the first argument
 	int result = Main_UseMeFromC_add(instance, 1, 2);
 	Main_releaseHaxeObject(instance);
