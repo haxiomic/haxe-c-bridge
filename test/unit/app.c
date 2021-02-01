@@ -141,7 +141,9 @@ int main(void) {
 		HaxeObject* instance = HaxeLib_Instance_new("new from C");
 		HaxeLib_Instance_methodNoArgs(instance);
 		assert(HaxeLib_Instance_methodAdd(instance, 5, 6) == 11);
-		assert(strcmp(HaxeLib_Instance_overrideMe(instance), "new from C") == 0);
+		HaxeString* s = HaxeLib_Instance_overrideMe(instance);
+		assert(strcmp(s, "new from C") == 0);
+		HaxeLib_releaseHaxeString(s);
 		HaxeLib_releaseHaxeObject(instance);
 
 		#ifdef VALIDATE_RETAIN_CRASH
