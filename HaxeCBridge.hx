@@ -1176,8 +1176,10 @@ class CConverterContext {
 					https://github.com/HaxeFoundation/haxe/blob/65bb88834cea059035a73db48e79c7a5c5817ee8/src/generators/gencpp.ml#L1743
 				**/
 
-				case {t: {pack: [], name: "Null"}}:
-					Context.error("Null<T> is not supported for C export", pos);
+				case {t: {pack: [], name: "Null"}, params: [tp]}:
+					// Null<T> isn't supported, so we convert T instead
+					convertType(tp, allowNonTrivial, allowBareFnTypes, pos);
+
 				case {t: {pack: [], name: "Array"}}:
 					Context.error("Array<T> is not supported for C export, try using cpp.Pointer<T> instead", pos);
 
