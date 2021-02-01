@@ -1060,7 +1060,7 @@ class CConverterContext {
 						// 'HaxeObject' c typedef
 						getHaxeObjectCType(type);
 					} else {
-						Context.error('Type ${TypeTools.toString(type)} is not supported as secondary type for C export, use HaxeCBridge.HaxeObject instead', pos);
+						Context.error('Type ${TypeTools.toString(type)} is not supported as secondary type for C export, use HaxeCBridge.HaxeObject<${TypeTools.toString(type)}> instead', pos);
 					}
 				}
 
@@ -1075,7 +1075,7 @@ class CConverterContext {
 				if (allowNonTrivial) {
 					getHaxeObjectCType(type);
 				} else {
-					Context.error('Anons are not supported as secondary type for C export, use HaxeCBridge.HaxeObject instead', pos);
+					Context.error('Structures are not supported as secondary type for C export, use HaxeCBridge.HaxeObject<T> instead', pos);
 				}
 
 			case TAbstract(_.get() => t, _):
@@ -1131,7 +1131,7 @@ class CConverterContext {
 				if (allowNonTrivial) {
 					getHaxeObjectCType(type);
 				} else {
-					Context.error('Any and Dynamic are not supported as secondary type for C export, use HaxeCBridge.HaxeObject instead', pos);
+					Context.error('Any and Dynamic are not supported as secondary type for C export, use HaxeCBridge.HaxeObject<Any> instead', pos);
 				}
 			
 			case TMono(t):
@@ -1554,10 +1554,17 @@ import sys.thread.Lock;
 import sys.thread.Mutex;
 import sys.thread.Thread;
 
-abstract HaxeObject(cpp.RawPointer<cpp.Void>) from cpp.RawPointer<cpp.Void> to cpp.RawPointer<cpp.Void> {
+abstract HaxeObject<T>(cpp.RawPointer<cpp.Void>) from cpp.RawPointer<cpp.Void> to cpp.RawPointer<cpp.Void> {
+	public var value(get, never): T;
+
 	@:to
-	public function toDynamic(): Dynamic {
+	public inline function toDynamic(): Dynamic {
 		return untyped __cpp__('Dynamic((hx::Object *){0})', this);
+	}
+
+	@:to
+	inline function get_value(): T {
+		return toDynamic();
 	}
 }
 
@@ -1659,7 +1666,7 @@ class HaxeCBridge {
 	#end
 
 	@:noCompletion
-	static public function retainHaxeObject(haxeObject: Dynamic): HaxeObject {
+	static public function retainHaxeObject(haxeObject: Dynamic): HaxeObject<Any> {
 		// need to get pointer to object
 		var ptr: cpp.RawPointer<cpp.Void> = untyped __cpp__('{0}.mPtr', haxeObject);
 		// we can convert the ptr to int64
