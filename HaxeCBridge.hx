@@ -1392,7 +1392,7 @@ class CConverterContext {
 					If the object has no remaining reference the garbage collector can free the associated memory (which can happen at any time in the future). It does not free the memory immediately.
 
 					Thread-safety: can be called on any thread.
-					
+
 					@param haxeObject a handle to an arbitrary haxe object returned from a haxe function'),
 				kind: Function({
 					name: functionIdent,
