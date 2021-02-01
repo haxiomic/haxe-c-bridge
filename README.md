@@ -72,7 +72,7 @@ int Main_UseMeFromC_add(HaxeObject instance, int a, int b);
 HaxeString Main_UseMeFromC_exampleStaticFunction();
 ```
 
-We can use our function from C like so:
+We can use our class from C like so:
 ```C
 void onHaxeException(const char* info) {
 	printf("Haxe exception: \"%s\"\n", info);
