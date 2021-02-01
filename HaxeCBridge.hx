@@ -68,10 +68,10 @@ class HaxeCBridge {
 	
 	static var firstRun = true;
 
-	static final libName = getLibNameFromHaxeArgs();
+	static var libName: Null<String> = getLibNameFromHaxeArgs(); // null if no libName determined from args
+
 	static final compilerOutputDir = Compiler.getOutput();
 	// paths relative to the compiler output directory
-	static final headerPath = Path.join(['$libName.h']);
 	static final implementationPath = Path.join(['src', '__HaxeCBridgeBindings__.cpp']);
 	
 	static final queuedClasses = new Array<{
@@ -80,11 +80,6 @@ class HaxeCBridge {
 	}>();
 
 	// conversion state
-	static final cConversionContext = new CConverterContext({
-		declarationPrefix: libName,
-		generateTypedef: true,
-		generateTypedefWithTypeParameters: false,
-	});
 	static final functionInfo = new Map<String, {
 		kind: FunctionInfoKind,
 		hxcppClass: String,
@@ -99,46 +94,59 @@ class HaxeCBridge {
 	}>();
 
 	static public function expose(?namespace: String) {
+		var clsRef = Context.getLocalClass(); 
+		var cls = clsRef.get();
 		var fields = Context.getBuildFields();
 
-		// resolve runtime HaxeCBridge class to make sure it's generated
-		// add @:buildXml to include generated code
-		var HaxeCBridgeType = Context.resolveType(macro :HaxeCBridge, Context.currentPos());
-		switch HaxeCBridgeType {
-			case TInst(_.get().meta => meta, params):
-				if (!meta.has(':buildXml')) {
-					meta.add(':buildXml', [
-						macro $v{code('
-							<!-- HaxeCBridge -->
-							<files id="haxe">
-								<file name="$implementationPath">
-									<depend name="$headerPath"/>
-								</file>
-							</files>
-						')}
-					], Context.currentPos());
-				}
-			default: throw 'Internal error';
+		if (libName == null) {
+			// if we cannot determine a libName from --main or -D, we use the first exposed class
+			libName = if (namespace != null) {
+				namespace;
+			} else {
+				cls.name;
+			}
 		}
 
-		var cls = Context.getLocalClass(); 
-
 		queuedClasses.push({
-			cls: cls,
+			cls: clsRef,
 			namespace: namespace
 		});
 
 		// add @:keep
-		Context.getLocalClass().get().meta.add(':keep', [], Context.currentPos());
+		cls.meta.add(':keep', [], Context.currentPos());
 
 		if (firstRun) {
-			// if (!isLibraryBuild()) {
-				// Context.warning("HaxeCBridge: project is not compiled as a library – add -D dll_link or -D static_link to compile as a shared or static library", Context.currentPos());
-			// }
-			
+			final headerPath = Path.join(['$libName.h']);
+
+			// resolve runtime HaxeCBridge class to make sure it's generated
+			// add @:buildXml to include generated code
+			var HaxeCBridgeType = Context.resolveType(macro :HaxeCBridge, Context.currentPos());
+			switch HaxeCBridgeType {
+				case TInst(_.get().meta => meta, params):
+					if (!meta.has(':buildXml')) {
+						meta.add(':buildXml', [
+							macro $v{code('
+								<!-- HaxeCBridge -->
+								<files id="haxe">
+									<file name="$implementationPath">
+										<depend name="$headerPath"/>
+									</file>
+								</files>
+							')}
+						], Context.currentPos());
+					}
+				default: throw 'Internal error';
+			}
+
 			Context.onAfterTyping(_ -> {
+				final cConversionContext = new CConverterContext({
+					declarationPrefix: libName,
+					generateTypedef: true,
+					generateTypedefWithTypeParameters: false,
+				});
+
 				for (item in queuedClasses) {
-					convertQueuedClass(item.cls, item.namespace);
+					convertQueuedClass(libName, cConversionContext, item.cls, item.namespace);
 				}
 
 				var header = generateHeader(cConversionContext, libName);
@@ -177,7 +185,7 @@ class HaxeCBridge {
 		return nativeName;
 	}
 
-	static function convertQueuedClass(clsRef: Ref<ClassType>, namespace: String) {
+	static function convertQueuedClass(libName: String, cConversionContext: CConverterContext, clsRef: Ref<ClassType>, namespace: String) {
 		var cls = clsRef.get();
 		// validate
 		if (cls.isInterface) Context.error('Cannot expose interface to C', cls.pos);
@@ -735,8 +743,8 @@ class HaxeCBridge {
 			return safeIdent(mainClassPath);
 		}
 
-		// default to HaxeLibrary
-		return 'HaxeCBridge';
+		// no lib name indicator found in args
+		return null;
 	}
 
 	static function getMainFromHaxeArgs(args: Array<String>): Null<String> {
