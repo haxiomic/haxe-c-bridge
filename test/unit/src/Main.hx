@@ -7,7 +7,6 @@ import cpp.SizeT;
 import cpp.Star;
 import cpp.vm.Gc;
 import haxe.Timer;
-import sys.thread.Thread;
 
 @:buildXml('
 <files id="haxe">
@@ -27,7 +26,9 @@ class Main {
 
 	static function main() {
 		trace('main(): Hello from haxe ${Macro.getHaxeVersion()} and hxcp ${Macro.getHxcppVersion()}');
+
 		pack.ExampleClass; // make sure example class is referenced so the c api is generated
+		Instance; // ensure api is generated for Instance type
 
 		function loop() {
 			staticLoopCount++;
