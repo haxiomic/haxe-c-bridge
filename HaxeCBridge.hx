@@ -1,7 +1,7 @@
 /**
 	HaxeCBridge
 
-	A `@:build` macro to enable easy embedding of a multi-threaded haxe program within a native application via an automatically generated C header
+	HaxeCBridge is a @:build macro that enables calling haxe code from C by exposing classes via an automatically generated C header.
 
 	Works with the hxcpp target and requires haxe 4.0 or newer
 
@@ -11,7 +11,7 @@
 	**Usage**
 
 	Haxe-side:
-	- Add `@:build(HaxeCBridge.expose())` to classes containing *public static* functions you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
+	- Add `@:build(HaxeCBridge.expose())` to classes you want to expose to C (you can add this to as many classes as you like – all functions are combined into a single header file)
 		- The first argument of expose() sets generated C function name prefix: `expose('Example')` or `expose('')` for no prefix
 	- Add `-D dll_link` or `-D static_link` to compile your haxe program into a native library binary
 	- HaxeCBridge will then generate a header file in your build output directory named after your `--main` class (however a `--main` class is not required to use HaxeCBridge)
