@@ -92,6 +92,7 @@ int main(void) {
 	HaxeObject instance = Main_UseMeFromC_new(exampleCallback);
 	// to call members of instance, we pass the instance in as the first argument
 	int result = Main_UseMeFromC_add(instance, 1, 2);
+	// when we're done with our object we can tell the haxe-gc we're finished
 	Main_releaseHaxeObject(instance);
 
 	// call a static function
@@ -99,7 +100,6 @@ int main(void) {
 	printf("%s\n", cStr);
 	Main_releaseHaxeString(cStr);
 
-	// when we're done with our object we can tell the haxe-gc we're finished
 	// stop the haxe thread but wait for any scheduled events to complete
 	Main_stopHaxeThreadIfRunning(true);
 
