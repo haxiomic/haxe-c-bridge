@@ -1564,7 +1564,7 @@ import sys.thread.Lock;
 import sys.thread.Mutex;
 import sys.thread.Thread;
 
-abstract HaxeObject<T>(cpp.RawPointer<cpp.Void>) from cpp.RawPointer<cpp.Void> to cpp.RawPointer<cpp.Void> {
+abstract HaxeObject<T: {}>(cpp.RawPointer<cpp.Void>) from cpp.RawPointer<cpp.Void> to cpp.RawPointer<cpp.Void> {
 	public var value(get, never): T;
 
 	@:to
@@ -1676,7 +1676,7 @@ class HaxeCBridge {
 	#end
 
 	@:noCompletion
-	static public function retainHaxeObject(haxeObject: Dynamic): HaxeObject<Any> {
+	static public function retainHaxeObject(haxeObject: Dynamic): HaxeObject<{}> {
 		// need to get pointer to object
 		var ptr: cpp.RawPointer<cpp.Void> = untyped __cpp__('{0}.mPtr', haxeObject);
 		// we can convert the ptr to int64
