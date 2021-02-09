@@ -35,11 +35,10 @@ class Main {
 @:build(HaxeCBridge.expose())
 class UseMeFromC {
 
-	final callback: (num: Int) -> Void;
+	final callback: cpp.Callable<(num: Int) -> Void>;
 
-	// to expose haxe callbacks to C we wrap them in cpp.Callback<T>
-	public function new(exampleCallback: cpp.Callable<(num: Int) -> Void>) {
-		callback = (num) -> exampleCallback(num);
+	public function new(nativeCallback: cpp.Callable<(num: Int) -> Void>) {
+		this.callback = nativeCallback;
 	}
 
 	public function add(a: Int, b: Int) {
