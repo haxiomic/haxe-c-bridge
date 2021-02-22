@@ -1587,12 +1587,16 @@ class HaxeCBridge {
 	@:noCompletion
 	static public function mainThreadInit() @:privateAccess {
 		// replaces __hxcpp_main() in __main__.cpp
+		#if (haxe_ver < 4.3)
 		Thread.initEventLoop();
+		#end
 
 		Internal.mainThread = Thread.current();
 		Internal.mainThreadWaitLock = Thread.current().events.waitLock;
 
+		#if (haxe_ver < 4.3)
 		EntryPoint.init();
+		#end
 	}
 
 	@:noCompletion
