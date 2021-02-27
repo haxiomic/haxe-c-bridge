@@ -577,6 +577,13 @@ class HaxeCBridge {
 				}
 			}
 
+
+			class GlobalAllocator {
+				public:
+				void StopThreadJobs(bool inKill);
+			};
+			extern class GlobalAllocator *sGlobalAlloc;
+
 			HXCPP_EXTERN_CLASS_ATTRIBUTES
 			void ${namespace}_stopHaxeThreadIfRunning(bool waitOnScheduledEvents) {
 				if (HaxeCBridgeInternal::isHaxeMainThread()) {
@@ -596,6 +603,7 @@ class HaxeCBridge {
 						HaxeCBridgeInternal::runInMainThread(Callback::run, &waitOnScheduledEvents);
 
 						HaxeCBridgeInternal::waitForThreadExit(HaxeCBridgeInternal::haxeThreadNativeHandle);
+						sGlobalAlloc->StopThreadJobs(true);
 					}
 				}
 			}
