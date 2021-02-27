@@ -27,7 +27,7 @@ namespace HaxeCBridgeInternal {
 
 	// we cannot use hxcpps HxCreateDetachedThread() because we cannot wait on these threads to end on unix because they are detached threads
 	#if defined(HX_WINDOWS)
-	HANDLE mainThreadNativeHandle = nullptr;
+	HANDLE haxeThreadNativeHandle = nullptr;
 	HANDLE getNativeThreadHandle() {
 		return GetCurrentThread();
 	}
@@ -39,7 +39,7 @@ namespace HaxeCBridgeInternal {
 		return result != WAIT_FAILED;
 	}
 	#else
-	pthread_t mainThreadNativeHandle = nullptr;
+	pthread_t haxeThreadNativeHandle = nullptr;
 	pthread_t getNativeThreadHandle() {
 		return pthread_self();
 	}
@@ -73,7 +73,7 @@ namespace HaxeCBridgeInternal {
 
 	HxSemaphore threadInitSemaphore;
 	HxMutex threadManageMutex;
-	Dynamic mainThreadRef;
+	Dynamic haxeThreadRef;
 
 	void defaultExceptionHandler(const char* info) {
 		printf("Unhandled haxe exception: %s\n", info);
@@ -103,17 +103,17 @@ namespace HaxeCBridgeInternal {
 	bool isHaxeMainThread() {
 		hx::NativeAttach autoAttach;
 		Dynamic currentInfo = __hxcpp_thread_current();
-		return HaxeCBridgeInternal::mainThreadRef.mPtr == currentInfo.mPtr;
+		return HaxeCBridgeInternal::haxeThreadRef.mPtr == currentInfo.mPtr;
 	}
 }
 
 THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 	HX_TOP_OF_STACK
-	HaxeCBridgeInternal::mainThreadNativeHandle = HaxeCBridgeInternal::getNativeThreadHandle();
+	HaxeCBridgeInternal::haxeThreadNativeHandle = HaxeCBridgeInternal::getNativeThreadHandle();
 	HaxeCBridgeInternal::HaxeThreadData* threadData = (HaxeCBridgeInternal::HaxeThreadData*) data;
-	HaxeCBridgeInternal::mainThreadRef = __hxcpp_thread_current();
+	HaxeCBridgeInternal::haxeThreadRef = __hxcpp_thread_current();
 
-	HaxeCBridgeInternal::threadRunning = true; // must come after mainThreadRef assignment
+	HaxeCBridgeInternal::threadRunning = true; // must come after haxeThreadRef assignment
 
 	threadData->initExceptionInfo = nullptr;
 
@@ -201,7 +201,7 @@ void HaxeLib_stopHaxeThreadIfRunning(bool waitOnScheduledEvents) {
 
 			HaxeCBridgeInternal::runInMainThread(Callback::run, &waitOnScheduledEvents);
 
-			HaxeCBridgeInternal::waitForThreadExit(HaxeCBridgeInternal::mainThreadNativeHandle);
+			HaxeCBridgeInternal::waitForThreadExit(HaxeCBridgeInternal::haxeThreadNativeHandle);
 		}
 	}
 }
