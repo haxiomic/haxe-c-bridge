@@ -1,3 +1,5 @@
+echo "haxe version" $(haxe --version)
+
 # assumes macOS system
 TIMEOUT_SECONDS=120
 
