@@ -760,7 +760,7 @@ class HaxeCBridge {
 	}
 
 	/**
-		We determine a project name to be the `--main` startup class or the first specified class-path
+		We determine a project name to be the `--main` startup class
 
 		The user can override this with `-D HaxeCBridge.name=ExampleName`
 
