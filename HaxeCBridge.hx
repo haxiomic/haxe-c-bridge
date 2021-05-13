@@ -1348,7 +1348,7 @@ class CConverterContext {
 	}
 
 	function getEnumCType(type: Type, allowNonTrivial: Bool, pos: Position): CType {
-		var ident = declarationPrefix + '_' + typeDeclarationIdent(type, false);
+		var ident = safeIdent(declarationPrefix + '_' + typeDeclarationIdent(type, false));
 
 		// `enum ident` is considered non-trivial
 		if (!allowNonTrivial) {
@@ -1377,7 +1377,7 @@ class CConverterContext {
 	}
 
 	function getTypeAliasCType(type: Type, allowNonTrivial: Bool, allowBareFnTypes: Bool, pos: Position): CType {
-		var ident = declarationPrefix + '_' + typeDeclarationIdent(type, false);
+		var ident = safeIdent(declarationPrefix + '_' + typeDeclarationIdent(type, false));
 
 		// order of typedef typeDeclarations should be dependency correct because required typedefs are added before this typedef is added
 		// we call this outside the exists() branch below to make sure `allowNonTrivial` and `allowBareFnTypes` errors will be caught
@@ -1397,7 +1397,7 @@ class CConverterContext {
 	function getFunctionCType(args: Array<{name: String, opt: Bool, t: Type}>, ret: Type, pos: Position): CType {
 		// optional type parameters are not supported and become non-optional
 
-		var ident = 'function_' + args.map(arg -> typeDeclarationIdent(arg.t, false)).concat([typeDeclarationIdent(ret, false)]).join('_');
+		var ident = safeIdent('function_' + args.map(arg -> typeDeclarationIdent(arg.t, false)).concat([typeDeclarationIdent(ret, false)]).join('_'));
 		var funcPointer: CType = FunctionPointer(
 			ident,
 			args.map(arg -> convertType(arg.t, false, false, pos)),
