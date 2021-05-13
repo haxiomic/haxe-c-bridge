@@ -265,7 +265,7 @@ class HaxeCBridge {
 					// store useful information about this function that we can use when generating the implementation
 					functionInfo.set(cFuncName, {
 						kind: kind,
-						hxcppClass: nativeName,
+						hxcppClass: nativeName.split('.').join('::'),
 						hxcppFunctionName: hxcppClass + '::' + switch kind {
 							case Constructor: '__new';
 							case Static | Member: f.name;
@@ -1362,7 +1362,7 @@ class CConverterContext {
 					var enumFields = a.impl.get().statics.get()
 						.filter(field -> field.meta.has(':enum') && field.meta.has(':value'))
 						.map(field -> {
-							name: field.name,
+							name: safeIdent(field.name),
 							value: getValue(field.meta.extract(':value')[0].params[0])
 						});
 
@@ -1533,6 +1533,8 @@ class CConverterContext {
 		"size_t", "int64_t", "uint64_t",
 		// HaxeCBridge types
 		"HaxeObject", "HaxeExceptionCallback",
+		// hxcpp
+		"Int", "String", "Float", "Dynamic", "Bool",
 	];
 
 }
