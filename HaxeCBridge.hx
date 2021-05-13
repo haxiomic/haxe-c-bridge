@@ -1588,7 +1588,7 @@ class CodeTools {
 
 	#end // (display || display_details || target.name != cpp)
 
-#else
+#elseif cpp
 
 // runtime HaxeCBridge
 
