@@ -30,7 +30,7 @@
 
 	// fast path for when code gen isn't required
 	// disable this to get auto-complete when editing this file
-	#if (display || display_details || target.name != cpp)
+	#if (display || display_details || target.name != cpp || cppia)
 
 class HaxeCBridge {
 	public static function expose(?namespace: String)
@@ -94,6 +94,8 @@ class HaxeCBridge {
 	}>();
 
 	static public function expose(?namespace: String) {
+		trace('expose', Context.getDefines());
+
 		var clsRef = Context.getLocalClass(); 
 		var cls = clsRef.get();
 		var fields = Context.getBuildFields();
@@ -1590,7 +1592,7 @@ class CodeTools {
 
 	#end // (display || display_details || target.name != cpp)
 
-#elseif cpp
+#elseif (cpp && !cppia)
 
 // runtime HaxeCBridge
 
