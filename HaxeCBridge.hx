@@ -94,8 +94,6 @@ class HaxeCBridge {
 	}>();
 
 	static public function expose(?namespace: String) {
-		trace('expose', Context.getDefines());
-
 		var clsRef = Context.getLocalClass(); 
 		var cls = clsRef.get();
 		var fields = Context.getBuildFields();
