@@ -433,7 +433,7 @@ class HaxeCBridge {
 					return result != WAIT_FAILED;
 				}
 				#else
-				pthread_t haxeThreadNativeHandle = nullptr;
+				pthread_t haxeThreadNativeHandle;
 				pthread_t getNativeThreadHandle() {
 					return pthread_self();
 				}
