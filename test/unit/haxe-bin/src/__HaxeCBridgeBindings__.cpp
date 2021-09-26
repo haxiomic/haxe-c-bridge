@@ -585,6 +585,42 @@ int* HaxeLib_getHaxeArray(int* a0) {
 }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
+int64_t* HaxeLib_getHaxeArrayStr(int* a0) {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return test::HxPublicApi_obj::getHaxeArrayStr(a0);
+	}
+	struct Data {
+		struct {int* a0;} args;
+		HxSemaphore lock;
+		int64_t* ret;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				data->ret = test::HxPublicApi_obj::getHaxeArrayStr(data->args.a0);
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {a0} };
+
+	// queue a callback to execute getHaxeArrayStr() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+	return data.ret;
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
 void HaxeLib_allocateABunchOfData() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::allocateABunchOfData();
