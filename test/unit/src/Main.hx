@@ -200,6 +200,12 @@ class PublicCApi {
 		v.someFloat *= 2;
 		return v;
 	}
+
+	static public function getHaxeArray(length: Star<Int>) {
+		var array = [1,2,3,4,5];
+		Native.set(length, array.length);
+		return cpp.Pointer.ofArray(array);
+	}
 	
 	/** Test the GC behavior, runs on haxe main thread **/
 	static public function allocateABunchOfData(): Void {

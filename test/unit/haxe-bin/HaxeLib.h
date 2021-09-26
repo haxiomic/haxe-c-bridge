@@ -129,6 +129,8 @@ extern "C" {
 
 	MessagePayload HaxeLib_externStruct(MessagePayload v, MessagePayload* vStar);
 
+	int* HaxeLib_getHaxeArray(int* length);
+
 	/**
 	 * Test the GC behavior, runs on haxe main thread
 	 */

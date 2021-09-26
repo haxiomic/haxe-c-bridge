@@ -39,7 +39,7 @@ namespace HaxeCBridgeInternal {
 		return result != WAIT_FAILED;
 	}
 	#else
-	pthread_t haxeThreadNativeHandle = nullptr;
+	pthread_t haxeThreadNativeHandle;
 	pthread_t getNativeThreadHandle() {
 		return pthread_self();
 	}
@@ -543,6 +543,42 @@ MessagePayload HaxeLib_externStruct(MessagePayload a0, MessagePayload* a1) {
 	Data data = { {a0, a1} };
 
 	// queue a callback to execute externStruct() on the main thread and wait until execution completes
+	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
+	data.lock.Wait();
+	return data.ret;
+}
+
+HXCPP_EXTERN_CLASS_ATTRIBUTES
+int* HaxeLib_getHaxeArray(int* a0) {
+	if (HaxeCBridgeInternal::isHaxeMainThread()) {
+		return test::HxPublicApi_obj::getHaxeArray(a0);
+	}
+	struct Data {
+		struct {int* a0;} args;
+		HxSemaphore lock;
+		int* ret;
+	};
+	struct Callback {
+		static void run(void* p) {
+			// executed within the haxe main thread
+			Data* data = (Data*) p;
+			try {
+				data->ret = test::HxPublicApi_obj::getHaxeArray(data->args.a0);
+				data->lock.Set();
+			} catch(Dynamic runtimeException) {
+				data->lock.Set();
+				throw runtimeException;
+			}
+		}
+	};
+
+	#ifdef HXCPP_DEBUG
+	assert(HaxeCBridgeInternal::threadRunning && "haxe thread not running, use HaxeLib_initializeHaxeThread() to activate the haxe thread");
+	#endif
+
+	Data data = { {a0} };
+
+	// queue a callback to execute getHaxeArray() on the main thread and wait until execution completes
 	HaxeCBridgeInternal::runInMainThread(Callback::run, &data);
 	data.lock.Wait();
 	return data.ret;

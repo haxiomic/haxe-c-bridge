@@ -160,6 +160,19 @@ int main(void) {
 	// can we pass NULL for an object?
 	HaxeLib_checkNull(NULL, 0);
 
+	int arrayLength = 0;
+	int* array = HaxeLib_getHaxeArray(&arrayLength);
+	// run a major GC to make sure the underlying data would be collected if there was a bug
+	HaxeLib_Main_hxcppGcRun(true);
+	// expect [1,2,3,4,5]
+	printf("array (%d)", arrayLength);
+	assert(arrayLength == 5);
+	assert(array[0] == 1);
+	assert(array[1] == 2);
+	assert(array[2] == 3);
+	assert(array[3] == 4);
+	assert(array[4] == 5);
+
 	// sleep one second and verify the haxe thread event loop continued to run
 	log("sleeping 1s to let the haxe thread event loop run");
 	sleep(1);
