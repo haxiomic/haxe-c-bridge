@@ -1,3 +1,5 @@
+import cpp.RawConstPointer;
+import cpp.ConstPointer;
 import cpp.Callable;
 import cpp.ConstCharStar;
 import cpp.ConstStar;
@@ -26,7 +28,7 @@ class Main {
 	static var loopTimer: Null<Timer>;
 
 	static function main() {
-		trace('main(): Hello from haxe ${Macro.getHaxeVersion()} and hxcp ${Macro.getHxcppVersion()}');
+		trace('main(): Hello from haxe ${Macro.getHaxeVersion()} and hxcpp ${Macro.getHxcppVersion()}');
 
 		pack.ExampleClass; // make sure example class is referenced so the c api is generated
 		Instance; // ensure api is generated for Instance type
@@ -203,8 +205,29 @@ class PublicCApi {
 
 	static public function getHaxeArray(length: Star<Int>) {
 		var array = [1,2,3,4,5];
+		HaxeCBridge.retainHaxeObject(array); // @! this isn't ideal, retain should happen automatically
 		Native.set(length, array.length);
 		return cpp.Pointer.ofArray(array);
+	}
+
+	static public function getHaxeArrayStr(length: Star<Int>) {
+		var array = ['a', 'bbb', 'c'];
+		Native.set(length, array.length);
+
+		// we cannot pass this to C as-is, because it's not an array of C-friendly strings, it's an array of haxe string objects
+		// instead we want to return a C array of C strings, aka const char **
+		// we need some way to manage the memory, we could allocate here with malloc, but then who will free this memory in the future?
+
+		var nativeArray = new Array<cpp.Int64>();
+		for (i in 0...array.length) {
+			var cStr = ConstCharStar.fromString(array[i]);
+			var ptrInt64: cpp.Int64 = untyped __cpp__('reinterpret_cast<int64_t>({0})', cStr);
+			nativeArray[i] = ptrInt64;
+		}
+
+		HaxeCBridge.retainHaxeObject(nativeArray); // @! this isn't ideal, retain should happen automatically
+
+		return cpp.Pointer.ofArray(nativeArray);
 	}
 	
 	/** Test the GC behavior, runs on haxe main thread **/

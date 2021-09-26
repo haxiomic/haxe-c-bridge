@@ -131,6 +131,8 @@ extern "C" {
 
 	int* HaxeLib_getHaxeArray(int* length);
 
+	int64_t* HaxeLib_getHaxeArrayStr(int* length);
+
 	/**
 	 * Test the GC behavior, runs on haxe main thread
 	 */

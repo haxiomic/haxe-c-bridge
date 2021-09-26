@@ -160,18 +160,27 @@ int main(void) {
 	// can we pass NULL for an object?
 	HaxeLib_checkNull(NULL, 0);
 
-	int arrayLength = 0;
-	int* array = HaxeLib_getHaxeArray(&arrayLength);
-	// run a major GC to make sure the underlying data would be collected if there was a bug
-	HaxeLib_Main_hxcppGcRun(true);
-	// expect [1,2,3,4,5]
-	printf("array (%d)", arrayLength);
-	assert(arrayLength == 5);
-	assert(array[0] == 1);
-	assert(array[1] == 2);
-	assert(array[2] == 3);
-	assert(array[3] == 4);
-	assert(array[4] == 5);
+	for (int i = 0; i < 100; i++) { // run many times to try to catch GC issues
+		// test returning Array<Int>
+		int arrayLength = 0;
+		int* array = HaxeLib_getHaxeArray(&arrayLength);
+		// run a major GC to make sure the underlying data would be collected if there was a bug
+		HaxeLib_Main_hxcppGcRun(true);
+		// expect [1,2,3,4,5]
+		assert(arrayLength == 5);
+		if (array[0] != 1 || array[1] != 2 || array[2] != 3 || array[3] != 4 || array[4] != 5) {
+			logf("Array<int> (%d), expected [1, 2, 3, 4, 5] got [%d, %d, %d, %d, %d]", arrayLength, array[0], array[1], array[2], array[3], array[4]);
+			assert(false);
+		}
+	}
+	{
+		int arrayLength = 0;
+		const char** array = HaxeLib_getHaxeArrayStr(&arrayLength);
+		// run a major GC to make sure the underlying data would be collected if there was a bug
+		HaxeLib_Main_hxcppGcRun(true);
+		assert(arrayLength == 3);
+		logf("array char* (%d) [%s, %s, %s]", arrayLength, array[0], array[1], array[2]);
+	}
 
 	// sleep one second and verify the haxe thread event loop continued to run
 	log("sleeping 1s to let the haxe thread event loop run");

@@ -1718,7 +1718,6 @@ class HaxeCBridge {
 	}
 	#end
 
-	@:noCompletion
 	static public function retainHaxeObject(haxeObject: Dynamic): HaxeObject<{}> {
 		// need to get pointer to object
 		var ptr: cpp.RawPointer<cpp.Void> = untyped __cpp__('{0}.mPtr', haxeObject);
@@ -1729,7 +1728,6 @@ class HaxeCBridge {
 		return ptr;
 	}
 
-	@:noCompletion
 	static public function retainHaxeString(haxeString: String): cpp.ConstCharStar {
 		var cStrPtr: cpp.ConstCharStar = cpp.ConstCharStar.fromString(haxeString);
 		var ptrInt64: Int64 = untyped __cpp__('reinterpret_cast<int64_t>({0})', cStrPtr);
