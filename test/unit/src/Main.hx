@@ -203,6 +203,7 @@ class PublicCApi {
 		return v;
 	}
 
+	/*
 	static public function getHaxeArray(length: Star<Int>) {
 		var array = [1,2,3,4,5];
 		HaxeCBridge.retainHaxeObject(array); // @! this isn't ideal, retain should happen automatically
@@ -229,6 +230,7 @@ class PublicCApi {
 
 		return cpp.Pointer.ofArray(nativeArray);
 	}
+	*/
 	
 	/** Test the GC behavior, runs on haxe main thread **/
 	static public function allocateABunchOfData(): Void {
