@@ -9,7 +9,7 @@
 #include <stdbool.h>
 
 #ifdef _WIN32
-	// windows specific
+	// windows compatibility
 	#include <windows.h>
 
 	// time.h implementation https://stackoverflow.com/a/31335254
@@ -38,8 +38,6 @@
 			if (!(spec->tv_nsec < exp9)) { spec->tv_sec++; spec->tv_nsec -=exp9; }
 	return 0;
 	}
-	
-
 #else
 	#include <time.h>
 	#include <unistd.h>
