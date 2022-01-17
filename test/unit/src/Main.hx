@@ -12,14 +12,16 @@ import haxe.Timer;
 import HaxeCBridge.HaxeObject;
 
 @:buildXml('
-<files id="haxe">
-	<compilerflag value="-fno-omit-frame-pointer" />
-	<compilerflag value="-fsanitize=address" />
-</files>
-<linker id="dll">
-	<flag value="-fno-omit-frame-pointer" />
-	<flag value="-fsanitize=address" />
-</linker>
+<section if="macos">
+	<files id="haxe">
+		<compilerflag value="-fno-omit-frame-pointer" />
+		<compilerflag value="-fsanitize=address" />
+	</files>
+	<linker id="dll">
+		<flag value="-fno-omit-frame-pointer" />
+		<flag value="-fsanitize=address" />
+	</linker>
+</section>
 ')
 @:build(HaxeCBridge.expose())
 class Main {
