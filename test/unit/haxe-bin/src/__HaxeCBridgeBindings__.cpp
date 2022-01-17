@@ -15,6 +15,8 @@
 
 #include "../HaxeLib.h"
 
+#define HAXE_C_BRIDGE_LINKAGE HXCPP_EXTERN_CLASS_ATTRIBUTES
+
 #include <test/HxPublicApi.h>
 #include <haxe/ds/StringMap.h>
 #include <_Main/CustomType.h>
@@ -31,10 +33,10 @@ namespace HaxeCBridgeInternal {
 	HANDLE getNativeThreadHandle() {
 		return GetCurrentThread();
 	}
-	bool createHaxeThread(DWORD (WINAPI *func)(void *), void *param, void *param) {
+	bool createHaxeThread(DWORD (WINAPI *func)(void *), void *param) {
 		return HxCreateDetachedThread(func, param);
 	}
-	bool waitForThreadExit(pthread_t handle) {
+	bool waitForThreadExit(HANDLE handle) {
 		DWORD result = WaitForSingleObject(handle, INFINITE);
 		return result != WAIT_FAILED;
 	}
@@ -148,12 +150,11 @@ THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 	THREAD_FUNC_RET
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
-	HaxeCBridgeInternal::HaxeThreadData threadData = {
-		.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? HaxeCBridgeInternal::defaultExceptionHandler : unhandledExceptionCallback,
-		.initExceptionInfo = nullptr,
-	};
+	HaxeCBridgeInternal::HaxeThreadData threadData;
+	threadData.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? HaxeCBridgeInternal::defaultExceptionHandler : unhandledExceptionCallback;
+	threadData.initExceptionInfo = nullptr;
 
 	{
 		// mutex prevents two threads calling this function from being able to start two haxe threads
@@ -183,7 +184,7 @@ const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptio
 	}
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_stopHaxeThreadIfRunning(bool waitOnScheduledEvents) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on for the thread to end
@@ -206,7 +207,7 @@ void HaxeLib_stopHaxeThreadIfRunning(bool waitOnScheduledEvents) {
 	}
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_releaseHaxeObject(void* objPtr) {
 	struct Callback {
 		static void run(void* data) {
@@ -216,13 +217,13 @@ void HaxeLib_releaseHaxeObject(void* objPtr) {
 	HaxeCBridgeInternal::runInMainThread(Callback::run, objPtr);
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_releaseHaxeString(const char* strPtr) {
 	// we use the same release call for all haxe pointers
 	HaxeLib_releaseHaxeObject((void*) strPtr);
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_voidRtn(int a0, HaxeString a1, HaxeLib_NonTrivialAlias a2, HaxeLib_EnumAlias a3) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::voidRtn(a0, a1, a2, a3);
@@ -256,7 +257,7 @@ void HaxeLib_voidRtn(int a0, HaxeString a1, HaxeLib_NonTrivialAlias a2, HaxeLib_
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeNoArgsNoReturn() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::noArgsNoReturn();
@@ -290,7 +291,7 @@ void HaxeNoArgsNoReturn() {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 bool HaxeLib_callInMainThread(double a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::callInMainThread(a0);
@@ -326,13 +327,13 @@ bool HaxeLib_callInMainThread(double a0) {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 bool HaxeLib_callInExternalThread(double a0) {
 	hx::NativeAttach autoAttach;
 	return test::HxPublicApi_obj::callInExternalThread(a0);
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 int HaxeLib_add(int a0, int a1) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::add(a0, a1);
@@ -368,7 +369,7 @@ int HaxeLib_add(int a0, int a1) {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 int* HaxeLib_starPointers(void* a0, HaxeLib_CppVoidX* a1, HaxeLib_CppVoidX* a2, int** a3, const void* a4, int* a5, const char* a6) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::starPointers(a0, a1, a2, a3, a4, a5, a6);
@@ -404,7 +405,7 @@ int* HaxeLib_starPointers(void* a0, HaxeLib_CppVoidX* a1, HaxeLib_CppVoidX* a2, 
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void* HaxeLib_rawPointers(void* a0, int64_t* a1, const void* a2) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::rawPointers(a0, a1, a2);
@@ -440,7 +441,7 @@ void* HaxeLib_rawPointers(void* a0, int64_t* a1, const void* a2) {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 int64_t* HaxeLib_hxcppPointers(function_Bool_Void a0, void* a1, int64_t* a2, int a3, const void* a4) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::hxcppPointers(a0, a1, a2, a3, a4);
@@ -476,7 +477,7 @@ int64_t* HaxeLib_hxcppPointers(function_Bool_Void a0, void* a1, int64_t* a2, int
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void a0, function_Void a1, function_Int a2, function_Int_cpp_ConstCharStar a3, function_cpp_Star_Int__cpp_Star_Int_ a4, HaxeLib_FunctionAlias a5, function_MessagePayload_Void a6) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::hxcppCallbacks(a0, a1, a2, a3, a4, a5, a6);
@@ -512,7 +513,7 @@ function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void a0, fun
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 MessagePayload HaxeLib_externStruct(MessagePayload a0, MessagePayload* a1) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::externStruct(a0, a1);
@@ -548,7 +549,7 @@ MessagePayload HaxeLib_externStruct(MessagePayload a0, MessagePayload* a1) {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 int* HaxeLib_getHaxeArray(int* a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::getHaxeArray(a0);
@@ -584,7 +585,7 @@ int* HaxeLib_getHaxeArray(int* a0) {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 int64_t* HaxeLib_getHaxeArrayStr(int* a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::getHaxeArrayStr(a0);
@@ -620,7 +621,7 @@ int64_t* HaxeLib_getHaxeArrayStr(int* a0) {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_allocateABunchOfData() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::allocateABunchOfData();
@@ -654,13 +655,13 @@ void HaxeLib_allocateABunchOfData() {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_allocateABunchOfDataExternalThread() {
 	hx::NativeAttach autoAttach;
 	return test::HxPublicApi_obj::allocateABunchOfDataExternalThread();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 enum HaxeLib_IntEnum2 HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract a0, const char* a1, HaxeLib_EnumAlias a2) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return static_cast<enum HaxeLib_IntEnum2>(test::HxPublicApi_obj::enumTypes(a0, a1, a2));
@@ -696,7 +697,7 @@ enum HaxeLib_IntEnum2 HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract a0, const c
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_cppCoreTypes(size_t a0, char a1, const char* a2) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::cppCoreTypes(a0, a1, a2);
@@ -730,7 +731,7 @@ void HaxeLib_cppCoreTypes(size_t a0, char a1, const char* a2) {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 uint64_t HaxeLib_cppCoreTypes2(int a0, double a1, float a2, signed char a3, short a4, int a5, int64_t a6, uint64_t a7, const char* a8) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::cppCoreTypes2(a0, a1, a2, a3, a4, a5, a6, a7, a8);
@@ -766,7 +767,7 @@ uint64_t HaxeLib_cppCoreTypes2(int a0, double a1, float a2, signed char a3, shor
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 HaxeObject HaxeLib_createHaxeAnon() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return HaxeCBridge::retainHaxeObject(test::HxPublicApi_obj::createHaxeAnon());
@@ -802,7 +803,7 @@ HaxeObject HaxeLib_createHaxeAnon() {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_checkHaxeAnon(HaxeObject a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::checkHaxeAnon(Dynamic((hx::Object *)a0));
@@ -836,7 +837,7 @@ void HaxeLib_checkHaxeAnon(HaxeObject a0) {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_checkAnonFromPointer(void* a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::checkAnonFromPointer(a0);
@@ -870,7 +871,7 @@ void HaxeLib_checkAnonFromPointer(void* a0) {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 HaxeObject HaxeLib_createHaxeMap() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return HaxeCBridge::retainHaxeObject(test::HxPublicApi_obj::createHaxeMap());
@@ -906,7 +907,7 @@ HaxeObject HaxeLib_createHaxeMap() {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_checkHaxeMap(HaxeObject a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::checkHaxeMap(Dynamic((hx::Object *)a0));
@@ -940,7 +941,7 @@ void HaxeLib_checkHaxeMap(HaxeObject a0) {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_checkNull(HaxeObject a0, double a1) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::checkNull(Dynamic((hx::Object *)a0), a1);
@@ -974,7 +975,7 @@ void HaxeLib_checkNull(HaxeObject a0, double a1) {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 HaxeObject HaxeLib_createCustomType() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return HaxeCBridge::retainHaxeObject(test::HxPublicApi_obj::createCustomType());
@@ -1010,7 +1011,7 @@ HaxeObject HaxeLib_createCustomType() {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_checkCustomType(HaxeObject a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::checkCustomType(Dynamic((hx::Object *)a0));
@@ -1044,7 +1045,7 @@ void HaxeLib_checkCustomType(HaxeObject a0) {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 HaxeString HaxeLib_createHaxeString() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return HaxeCBridge::retainHaxeString(test::HxPublicApi_obj::createHaxeString());
@@ -1080,7 +1081,7 @@ HaxeString HaxeLib_createHaxeString() {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_checkHaxeString(HaxeString a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::checkHaxeString(a0);
@@ -1114,7 +1115,7 @@ void HaxeLib_checkHaxeString(HaxeString a0) {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_throwException() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::throwException();
@@ -1148,7 +1149,7 @@ void HaxeLib_throwException() {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_Main_stopLoopingAfterTime_ms(int a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return Main_obj::stopLoopingAfterTime_ms(a0);
@@ -1182,7 +1183,7 @@ void HaxeLib_Main_stopLoopingAfterTime_ms(int a0) {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 int HaxeLib_Main_getLoopCount() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return Main_obj::getLoopCount();
@@ -1218,7 +1219,7 @@ int HaxeLib_Main_getLoopCount() {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 int HaxeLib_Main_hxcppGcMemUsage() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return Main_obj::hxcppGcMemUsage();
@@ -1254,13 +1255,13 @@ int HaxeLib_Main_hxcppGcMemUsage() {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 int HaxeLib_Main_hxcppGcMemUsageExternal() {
 	hx::NativeAttach autoAttach;
 	return Main_obj::hxcppGcMemUsageExternal();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_Main_hxcppGcRun(bool a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return Main_obj::hxcppGcRun(a0);
@@ -1294,7 +1295,7 @@ void HaxeLib_Main_hxcppGcRun(bool a0) {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_Main_printTime() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return Main_obj::printTime();
@@ -1328,7 +1329,7 @@ void HaxeLib_Main_printTime() {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return pack::_ExampleClass::ExampleClassPrivate::examplePrivate();
@@ -1364,7 +1365,7 @@ int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate() {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 int ExamplePrefix_example() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return pack::ExampleClass_obj::example();
@@ -1400,7 +1401,7 @@ int ExamplePrefix_example() {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 HaxeObject HaxeLib_Instance_new(HaxeString a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return HaxeCBridge::retainHaxeObject(Instance_obj::__new(a0));
@@ -1436,7 +1437,7 @@ HaxeObject HaxeLib_Instance_new(HaxeString a0) {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_Instance_methodNoArgs(HaxeObject a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return (Instance((hx::Object *)a0, true))->methodNoArgs();
@@ -1470,7 +1471,7 @@ void HaxeLib_Instance_methodNoArgs(HaxeObject a0) {
 	data.lock.Wait();
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 int HaxeLib_Instance_methodAdd(HaxeObject a0, int a1, int a2) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return (Instance((hx::Object *)a0, true))->methodAdd(a1, a2);
@@ -1506,7 +1507,7 @@ int HaxeLib_Instance_methodAdd(HaxeObject a0, int a1, int a2) {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 HaxeString HaxeLib_Instance_overrideMe(HaxeObject a0) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return HaxeCBridge::retainHaxeString((Instance((hx::Object *)a0, true))->overrideMe());
@@ -1542,7 +1543,7 @@ HaxeString HaxeLib_Instance_overrideMe(HaxeObject a0) {
 	return data.ret;
 }
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_Instance_staticMethod() {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return Instance_obj::staticMethod();
