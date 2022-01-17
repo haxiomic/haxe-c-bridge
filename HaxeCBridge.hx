@@ -522,13 +522,13 @@ class HaxeCBridge {
 				
 				#if defined(HX_WINDOWS)
 				bool isHaxeMainThread() {
-					return
+					return threadRunning &&
 					(GetCurrentThreadId() == haxeThreadNativeId) &&
 					(haxeThreadNativeId != 0);
 				}
 				#else
 				bool isHaxeMainThread() {
-					return pthread_equal(haxeThreadNativeHandle, pthread_self());
+					return threadRunning && pthread_equal(haxeThreadNativeHandle, pthread_self());
 				}
 				#endif
 			}
