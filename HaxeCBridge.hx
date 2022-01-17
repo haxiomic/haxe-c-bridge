@@ -306,6 +306,10 @@ class HaxeCBridge {
 		return Context.defined('dll_link') || Context.defined('static_link');
 	}
 
+	static function isDynamicLink() {
+		return Context.defined('dll_link');
+	}
+
 	static function getCNameMeta(meta: MetaAccess): Null<String> {
 		var cNameMeta = meta.extract('HaxeCBridge.name')[0];
 		return if (cNameMeta != null) {
@@ -330,6 +334,9 @@ class HaxeCBridge {
 				a.path > b.path ? 1 : -1; 
 			} else i - j;
 		});
+
+		var prefix = isDynamicLink() ? 'DYNAMIC_LINK' : '';
+		
 		return code('
 			/**
 			 * $namespace.h
@@ -341,11 +348,25 @@ class HaxeCBridge {
 
 			#ifndef HaxeCBridge_${namespace}_h
 			#define HaxeCBridge_${namespace}_h
-
 			')
-
 			+ (if (includes.length > 0) includes.map(CPrinter.printInclude).join('\n') + '\n\n'; else '')
 			+ (if (ctx.macros.length > 0) ctx.macros.join('\n') + '\n' else '')
+
+			+ (if (isDynamicLink()) {
+				code('
+					#ifdef _WIN32
+					#	ifdef HAXE_C_BRIDGE_EXPORT
+					#		define DYNAMIC_LINK __declspec(dllexport)
+					#	else
+					#		define DYNAMIC_LINK __declspec(dllimport)
+					#	endif
+					#elif
+					#	define DYNAMIC_LINK
+					#endif
+
+				');
+			} else '')
+
 			+ 'typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);\n'
 			+ (if (ctx.supportTypeDeclarations.length > 0) ctx.supportTypeDeclarations.map(d -> CPrinter.printDeclaration(d, true)).join(';\n') + ';\n\n'; else '')
 			+ (if (ctx.typeDeclarations.length > 0) ctx.typeDeclarations.map(d -> CPrinter.printDeclaration(d, true)).join(';\n') + ';\n'; else '')
@@ -364,7 +385,7 @@ class HaxeCBridge {
 				 * @param unhandledExceptionCallback a callback to execute if an unhandled exception occurs on the haxe thread. The haxe thread will continue processing events after an unhandled exception and you may want to stop it after receiving this callback. Use `NULL` for no callback
 				 * @returns `NULL` if the thread initializes successfully or a null-terminated C string if an error occurs during initialization
 				 */
-				const char* ${namespace}_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
+				$prefix const char* ${namespace}_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
 
 				/**
 				 * Stops the haxe thread, blocking until the thread has completed. Once ended, it cannot be restarted (this is because static variable state will be retained from the last run).
@@ -379,16 +400,18 @@ class HaxeCBridge {
 				 *
 				 * @param waitOnScheduledEvents If `true`, this function will wait for all events scheduled to execute in the future on the haxe thread to complete – this is the same behavior as running a normal hxcpp program. If `false`, immediate pending events will be finished and the thread stopped without executing events scheduled in the future
 				 */
-				void ${namespace}_stopHaxeThreadIfRunning(bool waitOnScheduledEvents);
+				$prefix void ${namespace}_stopHaxeThreadIfRunning(bool waitOnScheduledEvents);
 
 		')
-		+ indent(1, ctx.supportFunctionDeclarations.map(fn -> CPrinter.printDeclaration(fn, true)).join(';\n\n') + ';\n\n')
-		+ indent(1, ctx.functionDeclarations.map(fn -> CPrinter.printDeclaration(fn, true)).join(';\n\n') + ';\n\n')
+		+ indent(1, ctx.supportFunctionDeclarations.map(fn -> CPrinter.printDeclaration(fn, true, prefix)).join(';\n\n') + ';\n\n')
+		+ indent(1, ctx.functionDeclarations.map(fn -> CPrinter.printDeclaration(fn, true, prefix)).join(';\n\n') + ';\n\n')
 
 		+ code('
 			#ifdef __cplusplus
 			}
 			#endif
+
+			#undef DYNAMIC_LINK
 
 			#endif /* HaxeCBridge_${namespace}_h */
 		');
@@ -411,10 +434,8 @@ class HaxeCBridge {
 			#include <utility>
 			#include <atomic>
 
+			#define HAXE_C_BRIDGE_EXPORT
 			#include "../${namespace}.h"
-			
-			#define HAXE_C_BRIDGE_LINKAGE 
-
 		')
 		+ ctx.implementationIncludes.map(CPrinter.printInclude).join('\n') + '\n'
 		+ code('
@@ -544,7 +565,6 @@ class HaxeCBridge {
 				THREAD_FUNC_RET
 			}
 
-			HAXE_C_BRIDGE_LINKAGE
 			const char* ${namespace}_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
 				HaxeCBridgeInternal::HaxeThreadData threadData;
 				threadData.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? HaxeCBridgeInternal::defaultExceptionHandler : unhandledExceptionCallback;
@@ -578,7 +598,6 @@ class HaxeCBridge {
 				}
 			}
 
-			HAXE_C_BRIDGE_LINKAGE
 			void ${namespace}_stopHaxeThreadIfRunning(bool waitOnScheduledEvents) {
 				if (HaxeCBridgeInternal::isHaxeMainThread()) {
 					// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on for the thread to end
@@ -601,7 +620,6 @@ class HaxeCBridge {
 				}
 			}
 
-			HAXE_C_BRIDGE_LINKAGE
 			void ${namespace}_releaseHaxeObject(void* objPtr) {
 				struct Callback {
 					static void run(void* data) {
@@ -611,7 +629,6 @@ class HaxeCBridge {
 				HaxeCBridgeInternal::runInMainThread(Callback::run, objPtr);
 			}
 
-			HAXE_C_BRIDGE_LINKAGE
 			void ${namespace}_releaseHaxeString(const char* strPtr) {
 				// we use the same release call for all haxe pointers
 				${namespace}_releaseHaxeObject((void*) strPtr);
@@ -678,7 +695,6 @@ class HaxeCBridge {
 			// straight call through
 			return (
 				code('
-					HAXE_C_BRIDGE_LINKAGE
 					${CPrinter.printDeclaration(d, false)} {
 						hx::NativeAttach autoAttach;
 						return ${callWithArgs(signature.args.map(a->a.name))};
@@ -710,10 +726,7 @@ class HaxeCBridge {
 			var fnDataDeclaration: CDeclaration = { kind: Struct(fnDataTypeName, fnDataStruct) }
 
 			return (
-				code('
-					HAXE_C_BRIDGE_LINKAGE
-				')
-				+ CPrinter.printDeclaration(d, false) + ' {\n'
+				CPrinter.printDeclaration(d, false) + ' {\n'
 				+ indent(1,
 					code('
 						if (HaxeCBridgeInternal::isHaxeMainThread()) {
@@ -892,9 +905,10 @@ class CPrinter {
 		}
 	}
 
-	public static function printDeclaration(cDeclaration: CDeclaration, docComment: Bool = true) {
+	public static function printDeclaration(cDeclaration: CDeclaration, docComment: Bool = true, qualifier: String = '') {
 		return
 			(cDeclaration.doc != null && docComment ? (printDoc(cDeclaration.doc) + '\n') : '')
+			+ (qualifier != '' ? (qualifier + ' ') : '')
 			+ switch cDeclaration.kind {
 				case Typedef(type, declarators):
 					'typedef ${printType(type)}' + (declarators.length > 0 ? ' ${declarators.join(', ')}' :'');
