@@ -1,8 +1,8 @@
 @REM build haxe code
-haxe build-library.hxml
+haxe build-library.hxml || exit /b
 
 @REM open this file in an x64 visual studio command prompt  
-cl .\app.c /I .\haxe-bin\ /Zi /link .\haxe-bin\obj\lib\Main-debug.lib /DEBUG
+cl .\app.c /I .\haxe-bin\ /Zi /link .\haxe-bin\obj\lib\Main-debug.lib /DEBUG || exit /b
 @REM copy the dll locally
 copy haxe-bin\Main-debug.dll Main-debug.dll
 @REM copy the debugging info locally
