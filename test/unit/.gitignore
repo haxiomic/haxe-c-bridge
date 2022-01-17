@@ -10,3 +10,11 @@ haxe-bin/*
 !haxe-bin/src
 haxe-bin/src/*
 !haxe-bin/src/__HaxeCBridgeBindings__.cpp
+
+.vs
+enc_temp_folder
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.dll
