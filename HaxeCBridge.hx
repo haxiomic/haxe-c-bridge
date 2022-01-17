@@ -436,6 +436,8 @@ class HaxeCBridge {
 
 			#define HAXE_C_BRIDGE_EXPORT
 			#include "../${namespace}.h"
+
+			#define HAXE_C_BRIDGE_LINKAGE HXCPP_EXTERN_CLASS_ATTRIBUTES
 		')
 		+ ctx.implementationIncludes.map(CPrinter.printInclude).join('\n') + '\n'
 		+ code('
@@ -564,7 +566,8 @@ class HaxeCBridge {
 
 				THREAD_FUNC_RET
 			}
-
+			
+			HAXE_C_BRIDGE_LINKAGE
 			const char* ${namespace}_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
 				HaxeCBridgeInternal::HaxeThreadData threadData;
 				threadData.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? HaxeCBridgeInternal::defaultExceptionHandler : unhandledExceptionCallback;
@@ -598,6 +601,7 @@ class HaxeCBridge {
 				}
 			}
 
+			HAXE_C_BRIDGE_LINKAGE
 			void ${namespace}_stopHaxeThreadIfRunning(bool waitOnScheduledEvents) {
 				if (HaxeCBridgeInternal::isHaxeMainThread()) {
 					// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on for the thread to end
@@ -619,7 +623,8 @@ class HaxeCBridge {
 					}
 				}
 			}
-
+			
+			HAXE_C_BRIDGE_LINKAGE
 			void ${namespace}_releaseHaxeObject(void* objPtr) {
 				struct Callback {
 					static void run(void* data) {
@@ -695,6 +700,7 @@ class HaxeCBridge {
 			// straight call through
 			return (
 				code('
+					HAXE_C_BRIDGE_LINKAGE
 					${CPrinter.printDeclaration(d, false)} {
 						hx::NativeAttach autoAttach;
 						return ${callWithArgs(signature.args.map(a->a.name))};
@@ -726,6 +732,9 @@ class HaxeCBridge {
 			var fnDataDeclaration: CDeclaration = { kind: Struct(fnDataTypeName, fnDataStruct) }
 
 			return (
+				code('
+					HAXE_C_BRIDGE_LINKAGE
+				')
 				CPrinter.printDeclaration(d, false) + ' {\n'
 				+ indent(1,
 					code('
