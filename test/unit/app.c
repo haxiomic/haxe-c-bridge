@@ -175,7 +175,7 @@ int main(void) {
 	}
 	{
 		int arrayLength = 0;
-		const char** array = HaxeLib_getHaxeArrayStr(&arrayLength);
+		const char** array = (const char**)HaxeLib_getHaxeArrayStr(&arrayLength);
 		// run a major GC to make sure the underlying data would be collected if there was a bug
 		HaxeLib_Main_hxcppGcRun(true);
 		assert(arrayLength == 3);
