@@ -735,7 +735,7 @@ class HaxeCBridge {
 				code('
 					HAXE_C_BRIDGE_LINKAGE
 				')
-				CPrinter.printDeclaration(d, false) + ' {\n'
+				+ CPrinter.printDeclaration(d, false) + ' {\n'
 				+ indent(1,
 					code('
 						if (HaxeCBridgeInternal::isHaxeMainThread()) {
