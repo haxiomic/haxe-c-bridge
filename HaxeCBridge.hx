@@ -425,10 +425,10 @@ class HaxeCBridge {
 				HANDLE getNativeThreadHandle() {
 					return GetCurrentThread();
 				}
-				bool createHaxeThread(DWORD (WINAPI *func)(void *), void *param, void *param) {
+				bool createHaxeThread(DWORD (WINAPI *func)(void *), void *param) {
 					return HxCreateDetachedThread(func, param);
 				}
-				bool waitForThreadExit(pthread_t handle) {
+				bool waitForThreadExit(HANDLE handle) {
 					DWORD result = WaitForSingleObject(handle, INFINITE);
 					return result != WAIT_FAILED;
 				}
@@ -544,10 +544,9 @@ class HaxeCBridge {
 
 			HXCPP_EXTERN_CLASS_ATTRIBUTES
 			const char* ${namespace}_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
-				HaxeCBridgeInternal::HaxeThreadData threadData = {
-					.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? HaxeCBridgeInternal::defaultExceptionHandler : unhandledExceptionCallback,
-					.initExceptionInfo = nullptr,
-				};
+				HaxeCBridgeInternal::HaxeThreadData threadData;
+				threadData.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? HaxeCBridgeInternal::defaultExceptionHandler : unhandledExceptionCallback;
+				threadData.initExceptionInfo = nullptr;
 
 				{
 					// mutex prevents two threads calling this function from being able to start two haxe threads
