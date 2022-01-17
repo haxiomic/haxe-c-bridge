@@ -448,11 +448,9 @@ class HaxeCBridge {
 				#if defined(HX_WINDOWS)
 				DWORD haxeThreadNativeId = 0; // 0 is not valid thread id
 				HANDLE haxeThreadNativeHandle = nullptr;
-				HANDLE getNativeThreadHandle() {
-					return GetCurrentThread();
-				}
 				bool createHaxeThread(DWORD (WINAPI *func)(void *), void *param) {
-					return HxCreateDetachedThread(func, param);
+					haxeThreadNativeHandle = CreateThread(NULL, 0, func, param, 0, 0);
+					return haxeThreadNativeHandle != 0;
 				}
 				bool waitForThreadExit(HANDLE handle) {
 					DWORD result = WaitForSingleObject(handle, INFINITE);
@@ -460,16 +458,13 @@ class HaxeCBridge {
 				}
 				#else
 				pthread_t haxeThreadNativeHandle;
-				pthread_t getNativeThreadHandle() {
-					return pthread_self();
-				}
 				bool createHaxeThread(void *(*func)(void *), void *param) {
 					// same as HxCreateDetachedThread(func, param) but without detaching the thread
-					pthread_t t;
+
 					pthread_attr_t attr;
 					if (pthread_attr_init(&attr) != 0)
 						return false;
-					if (pthread_create(&t, &attr, func, param) != 0 )
+					if (pthread_create(&haxeThreadNativeHandle, &attr, func, param) != 0 )
 						return false;
 					if (pthread_attr_destroy(&attr) != 0)
 						return false;
@@ -534,11 +529,10 @@ class HaxeCBridge {
 
 			THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 				HX_TOP_OF_STACK
-				HaxeCBridgeInternal::haxeThreadNativeHandle = HaxeCBridgeInternal::getNativeThreadHandle();
-				HaxeCBridgeInternal::HaxeThreadData* threadData = (HaxeCBridgeInternal::HaxeThreadData*) data;
 				#if defined(HX_WINDOWS)
 				HaxeCBridgeInternal::haxeThreadNativeId = GetCurrentThreadId();
 				#endif 
+				HaxeCBridgeInternal::HaxeThreadData* threadData = (HaxeCBridgeInternal::HaxeThreadData*) data;
 
 				HaxeCBridgeInternal::threadRunning = true;
 
