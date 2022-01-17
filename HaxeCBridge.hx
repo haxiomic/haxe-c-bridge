@@ -413,6 +413,8 @@ class HaxeCBridge {
 
 			#include "../${namespace}.h"
 
+			#define HAXE_C_BRIDGE_LINKAGE extern "C"
+
 		')
 		+ ctx.implementationIncludes.map(CPrinter.printInclude).join('\n') + '\n'
 		+ code('
@@ -425,10 +427,10 @@ class HaxeCBridge {
 				HANDLE getNativeThreadHandle() {
 					return GetCurrentThread();
 				}
-				bool createHaxeThread(DWORD (WINAPI *func)(void *), void *param, void *param) {
+				bool createHaxeThread(DWORD (WINAPI *func)(void *), void *param) {
 					return HxCreateDetachedThread(func, param);
 				}
-				bool waitForThreadExit(pthread_t handle) {
+				bool waitForThreadExit(HANDLE handle) {
 					DWORD result = WaitForSingleObject(handle, INFINITE);
 					return result != WAIT_FAILED;
 				}
@@ -542,12 +544,11 @@ class HaxeCBridge {
 				THREAD_FUNC_RET
 			}
 
-			HXCPP_EXTERN_CLASS_ATTRIBUTES
+			HAXE_C_BRIDGE_LINKAGE
 			const char* ${namespace}_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
-				HaxeCBridgeInternal::HaxeThreadData threadData = {
-					.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? HaxeCBridgeInternal::defaultExceptionHandler : unhandledExceptionCallback,
-					.initExceptionInfo = nullptr,
-				};
+				HaxeCBridgeInternal::HaxeThreadData threadData;
+				threadData.haxeExceptionCallback = unhandledExceptionCallback == nullptr ? HaxeCBridgeInternal::defaultExceptionHandler : unhandledExceptionCallback;
+				threadData.initExceptionInfo = nullptr;
 
 				{
 					// mutex prevents two threads calling this function from being able to start two haxe threads
@@ -577,7 +578,7 @@ class HaxeCBridge {
 				}
 			}
 
-			HXCPP_EXTERN_CLASS_ATTRIBUTES
+			HAXE_C_BRIDGE_LINKAGE
 			void ${namespace}_stopHaxeThreadIfRunning(bool waitOnScheduledEvents) {
 				if (HaxeCBridgeInternal::isHaxeMainThread()) {
 					// it is possible for stopHaxeThread to be called from within the haxe thread, while another thread is waiting on for the thread to end
@@ -600,7 +601,7 @@ class HaxeCBridge {
 				}
 			}
 
-			HXCPP_EXTERN_CLASS_ATTRIBUTES
+			HAXE_C_BRIDGE_LINKAGE
 			void ${namespace}_releaseHaxeObject(void* objPtr) {
 				struct Callback {
 					static void run(void* data) {
@@ -610,7 +611,7 @@ class HaxeCBridge {
 				HaxeCBridgeInternal::runInMainThread(Callback::run, objPtr);
 			}
 
-			HXCPP_EXTERN_CLASS_ATTRIBUTES
+			HAXE_C_BRIDGE_LINKAGE
 			void ${namespace}_releaseHaxeString(const char* strPtr) {
 				// we use the same release call for all haxe pointers
 				${namespace}_releaseHaxeObject((void*) strPtr);
@@ -677,7 +678,7 @@ class HaxeCBridge {
 			// straight call through
 			return (
 				code('
-					HXCPP_EXTERN_CLASS_ATTRIBUTES
+					HAXE_C_BRIDGE_LINKAGE
 					${CPrinter.printDeclaration(d, false)} {
 						hx::NativeAttach autoAttach;
 						return ${callWithArgs(signature.args.map(a->a.name))};
@@ -710,7 +711,7 @@ class HaxeCBridge {
 
 			return (
 				code('
-					HXCPP_EXTERN_CLASS_ATTRIBUTES
+					HAXE_C_BRIDGE_LINKAGE
 				')
 				+ CPrinter.printDeclaration(d, false) + ' {\n'
 				+ indent(1,
