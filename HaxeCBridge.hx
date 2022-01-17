@@ -1691,7 +1691,7 @@ class HaxeCBridge {
 				// adapted from EventLoop.loop()
 				var eventTickInfo = eventLoop.customProgress(Sys.time(), events);
 				switch (eventTickInfo.nextEventAt) {
-					case -2: // continue to next loop
+					case -2: // continue to next loop, assume events could have been scheduled
 					case -1:
 						if (Internal.mainThreadEndIfNoPending && !eventTickInfo.anyTime) {
 							// no events scheduled in the future and not waiting on any promises
