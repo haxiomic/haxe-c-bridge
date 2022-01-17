@@ -520,6 +520,7 @@ class HaxeCBridge {
 				}
 
 				bool isHaxeMainThread() {
+					assert(HaxeCBridgeInternal::haxeThreadRef.mPtr != nullptr);
 					hx::NativeAttach autoAttach;
 					Dynamic currentInfo = __hxcpp_thread_current();
 					return HaxeCBridgeInternal::haxeThreadRef.mPtr == currentInfo.mPtr;
@@ -633,7 +634,8 @@ class HaxeCBridge {
 				};
 				HaxeCBridgeInternal::runInMainThread(Callback::run, objPtr);
 			}
-
+			
+			HAXE_C_BRIDGE_LINKAGE
 			void ${namespace}_releaseHaxeString(const char* strPtr) {
 				// we use the same release call for all haxe pointers
 				${namespace}_releaseHaxeObject((void*) strPtr);
