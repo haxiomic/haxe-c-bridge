@@ -493,7 +493,6 @@ class HaxeCBridge {
 
 				HxSemaphore threadInitSemaphore;
 				HxMutex threadManageMutex;
-				Dynamic haxeThreadRef;
 
 				void defaultExceptionHandler(const char* info) {
 					printf("Unhandled haxe exception: %s\\n", info);
@@ -537,12 +536,11 @@ class HaxeCBridge {
 				HX_TOP_OF_STACK
 				HaxeCBridgeInternal::haxeThreadNativeHandle = HaxeCBridgeInternal::getNativeThreadHandle();
 				HaxeCBridgeInternal::HaxeThreadData* threadData = (HaxeCBridgeInternal::HaxeThreadData*) data;
-				HaxeCBridgeInternal::haxeThreadRef = __hxcpp_thread_current();
 				#if defined(HX_WINDOWS)
 				HaxeCBridgeInternal::haxeThreadNativeId = GetCurrentThreadId();
 				#endif 
 
-				HaxeCBridgeInternal::threadRunning = true; // must come after haxeThreadRef assignment
+				HaxeCBridgeInternal::threadRunning = true;
 
 				threadData->initExceptionInfo = nullptr;
 
@@ -564,7 +562,7 @@ class HaxeCBridge {
 				if (HaxeCBridgeInternal::staticsInitialized) { // initialized without error
 					// blocks running the event loop
 					// keeps alive until manual stop is called
-					HaxeCBridge::mainThreadInit();
+					HaxeCBridge::mainThreadInit(HaxeCBridgeInternal::isHaxeMainThread);
 					HaxeCBridgeInternal::threadInitSemaphore.Set();
 					HaxeCBridge::mainThreadRun(HaxeCBridgeInternal::processNativeCalls, haxeExceptionCallback);
 				} else {
@@ -1659,13 +1657,13 @@ class HaxeCBridge {
 
 	#if (haxe_ver >= 4.2)
 	@:noCompletion
-	static public function mainThreadInit() @:privateAccess {
+	static public function mainThreadInit(isMainThreadCb: cpp.Callable<Void -> Bool>) @:privateAccess {
 		// replaces __hxcpp_main() in __main__.cpp
 		#if (haxe_ver < 4.201)
 		Thread.initEventLoop();
 		#end
 
-		Internal.mainThread = Thread.current();
+		Internal.isMainThreadCb = isMainThreadCb;
 		Internal.mainThreadWaitLock = Thread.current().events.waitLock;
 
 		#if (haxe_ver < 4.201)
@@ -1714,8 +1712,8 @@ class HaxeCBridge {
 	}
 	#else
 	@:noCompletion
-	static public function mainThreadInit() @:privateAccess {
-		Internal.mainThread = Thread.current();
+	static public function mainThreadInit(isMainThreadCb: cpp.Callable<Void -> Bool>) @:privateAccess {
+		Internal.isMainThreadCb = isMainThreadCb;
 		Internal.mainThreadWaitLock = EntryPoint.sleepLock;
 	}
 
@@ -1777,7 +1775,7 @@ class HaxeCBridge {
 
 	@:noCompletion
 	static public inline function isMainThread(): Bool {
-		return inline Thread.current() == Internal.mainThread;
+		return Internal.isMainThreadCb();
 	}
 	
 	/** not thread-safe, must be called in the haxe main thread **/
@@ -1801,7 +1799,7 @@ class HaxeCBridge {
 }
 
 private class Internal {
-	public static var mainThread: Thread;
+	public static var isMainThreadCb: cpp.Callable<Void -> Bool>;
 	public static var mainThreadWaitLock: Lock;
 	public static var mainThreadLoopActive: Bool = true;
 	public static var mainThreadEndIfNoPending: Bool = false;
