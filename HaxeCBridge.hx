@@ -446,6 +446,7 @@ class HaxeCBridge {
 
 				// we cannot use hxcpps HxCreateDetachedThread() because we cannot wait on these threads to end on unix because they are detached threads
 				#if defined(HX_WINDOWS)
+				DWORD haxeThreadNativeId = 0; // 0 is not valid thread id
 				HANDLE haxeThreadNativeHandle = nullptr;
 				HANDLE getNativeThreadHandle() {
 					return GetCurrentThread();
@@ -518,13 +519,22 @@ class HaxeCBridge {
 						pair.first(pair.second);
 					}
 				}
-
+				
+				#if defined(HX_WINDOWS)
 				bool isHaxeMainThread() {
-					assert(HaxeCBridgeInternal::haxeThreadRef.mPtr != nullptr);
+					return
+					(GetCurrentThreadId() == haxeThreadNativeId) &&
+					(haxeThreadNativeId != 0);
+				}
+				#else
+				bool isHaxeMainThread() {
 					hx::NativeAttach autoAttach;
 					Dynamic currentInfo = __hxcpp_thread_current();
-					return HaxeCBridgeInternal::haxeThreadRef.mPtr == currentInfo.mPtr;
+					return
+						(HaxeCBridgeInternal::haxeThreadRef.mPtr == currentInfo.mPtr) &&
+						(HaxeCBridgeInternal::haxeThreadRef.mPtr != nullptr);
 				}
+				#endif
 			}
 
 			THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
@@ -532,6 +542,9 @@ class HaxeCBridge {
 				HaxeCBridgeInternal::haxeThreadNativeHandle = HaxeCBridgeInternal::getNativeThreadHandle();
 				HaxeCBridgeInternal::HaxeThreadData* threadData = (HaxeCBridgeInternal::HaxeThreadData*) data;
 				HaxeCBridgeInternal::haxeThreadRef = __hxcpp_thread_current();
+				#if defined(HX_WINDOWS)
+				HaxeCBridgeInternal::haxeThreadNativeId = GetCurrentThreadId();
+				#endif 
 
 				HaxeCBridgeInternal::threadRunning = true; // must come after haxeThreadRef assignment
 
