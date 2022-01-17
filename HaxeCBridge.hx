@@ -355,13 +355,13 @@ class HaxeCBridge {
 			+ (if (isDynamicLink()) {
 				code('
 					#ifdef _WIN32
-					#	ifdef HAXE_C_BRIDGE_EXPORT
-					#		define DYNAMIC_LINK __declspec(dllexport)
-					#	else
-					#		define DYNAMIC_LINK __declspec(dllimport)
-					#	endif
-					#elif
-					#	define DYNAMIC_LINK
+						#ifdef HAXE_C_BRIDGE_EXPORT
+							#define DYNAMIC_LINK __declspec(dllexport)
+						#else
+							#define DYNAMIC_LINK __declspec(dllimport)
+						#endif
+					#else
+						#define DYNAMIC_LINK
 					#endif
 
 				');
