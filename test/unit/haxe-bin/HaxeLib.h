@@ -5,11 +5,20 @@
 
 #ifndef HaxeCBridge_HaxeLib_h
 #define HaxeCBridge_HaxeLib_h
-
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "MessagePayload.h"
+
+#ifdef _WIN32
+	#ifdef HAXE_C_BRIDGE_EXPORT
+		#define DYNAMIC_LINK __declspec(dllexport)
+	#else
+		#define DYNAMIC_LINK __declspec(dllimport)
+	#endif
+#else
+	#define DYNAMIC_LINK
+#endif
 
 typedef void (* HaxeExceptionCallback) (const char* exceptionInfo);
 /**
@@ -57,7 +66,7 @@ extern "C" {
 	 * @param unhandledExceptionCallback a callback to execute if an unhandled exception occurs on the haxe thread. The haxe thread will continue processing events after an unhandled exception and you may want to stop it after receiving this callback. Use `NULL` for no callback
 	 * @returns `NULL` if the thread initializes successfully or a null-terminated C string if an error occurs during initialization
 	 */
-	const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
+	DYNAMIC_LINK const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback);
 
 	/**
 	 * Stops the haxe thread, blocking until the thread has completed. Once ended, it cannot be restarted (this is because static variable state will be retained from the last run).
@@ -72,7 +81,7 @@ extern "C" {
 	 *
 	 * @param waitOnScheduledEvents If `true`, this function will wait for all events scheduled to execute in the future on the haxe thread to complete – this is the same behavior as running a normal hxcpp program. If `false`, immediate pending events will be finished and the thread stopped without executing events scheduled in the future
 	 */
-	void HaxeLib_stopHaxeThreadIfRunning(bool waitOnScheduledEvents);
+	DYNAMIC_LINK void HaxeLib_stopHaxeThreadIfRunning(bool waitOnScheduledEvents);
 
 	/**
 	 * Informs the garbage collector that the string is no longer needed by the C code.
@@ -83,7 +92,7 @@ extern "C" {
 	 * 
 	 * @param haxeString a handle to a haxe string returned from a haxe function
 	 */
-	void HaxeLib_releaseHaxeString(HaxeString haxeString);
+	DYNAMIC_LINK void HaxeLib_releaseHaxeString(HaxeString haxeString);
 
 	/**
 	 * Informs the garbage collector that object is no longer needed by the C code.
@@ -94,7 +103,7 @@ extern "C" {
 	 * 
 	 * @param haxeObject a handle to an arbitrary haxe object returned from a haxe function
 	 */
-	void HaxeLib_releaseHaxeObject(HaxeObject haxeObject);
+	DYNAMIC_LINK void HaxeLib_releaseHaxeObject(HaxeObject haxeObject);
 
 	/**
 	 * Some doc
@@ -102,106 +111,108 @@ extern "C" {
 	 * @param b some string
 	 * @returns void
 	 */
-	void HaxeLib_voidRtn(int a, HaxeString b, HaxeLib_NonTrivialAlias c, HaxeLib_EnumAlias e);
+	DYNAMIC_LINK void HaxeLib_voidRtn(int a, HaxeString b, HaxeLib_NonTrivialAlias c, HaxeLib_EnumAlias e);
 
-	void HaxeNoArgsNoReturn();
+	DYNAMIC_LINK void HaxeNoArgsNoReturn();
 
 	/**
 	 * when called externally from C this function will be executed synchronously on the main thread
 	 */
-	bool HaxeLib_callInMainThread(double f64);
+	DYNAMIC_LINK bool HaxeLib_callInMainThread(double f64);
 
 	/**
 	 * When called externally from C this function will be executed on the calling thread.
 	 * Beware: you cannot interact with the rest of your code without first synchronizing with the main thread (or risk crashes)
 	 */
-	bool HaxeLib_callInExternalThread(double f64);
+	DYNAMIC_LINK bool HaxeLib_callInExternalThread(double f64);
 
-	int HaxeLib_add(int a, int b);
+	DYNAMIC_LINK int HaxeLib_add(int a, int b);
 
-	int* HaxeLib_starPointers(void* starVoid, HaxeLib_CppVoidX* starVoid2, HaxeLib_CppVoidX* customStar, int** customStar2, const void* constStarVoid, int* starInt, const char* constCharStar);
+	DYNAMIC_LINK int* HaxeLib_starPointers(void* starVoid, HaxeLib_CppVoidX* starVoid2, HaxeLib_CppVoidX* customStar, int** customStar2, const void* constStarVoid, int* starInt, const char* constCharStar);
 
-	void* HaxeLib_rawPointers(void* rawPointer, int64_t* rawInt64Pointer, const void* rawConstPointer);
+	DYNAMIC_LINK void* HaxeLib_rawPointers(void* rawPointer, int64_t* rawInt64Pointer, const void* rawConstPointer);
 
-	int64_t* HaxeLib_hxcppPointers(function_Bool_Void assert, void* pointer, int64_t* int64Array, int int64ArrayLength, const void* constPointer);
+	DYNAMIC_LINK int64_t* HaxeLib_hxcppPointers(function_Bool_Void assert, void* pointer, int64_t* int64Array, int int64ArrayLength, const void* constPointer);
 
-	function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void assert, function_Void voidVoid, function_Int voidInt, function_Int_cpp_ConstCharStar intString, function_cpp_Star_Int__cpp_Star_Int_ pointers, HaxeLib_FunctionAlias fnAlias, function_MessagePayload_Void fnStruct);
+	DYNAMIC_LINK function_Int_cpp_ConstCharStar HaxeLib_hxcppCallbacks(function_Bool_Void assert, function_Void voidVoid, function_Int voidInt, function_Int_cpp_ConstCharStar intString, function_cpp_Star_Int__cpp_Star_Int_ pointers, HaxeLib_FunctionAlias fnAlias, function_MessagePayload_Void fnStruct);
 
-	MessagePayload HaxeLib_externStruct(MessagePayload v, MessagePayload* vStar);
+	DYNAMIC_LINK MessagePayload HaxeLib_externStruct(MessagePayload v, MessagePayload* vStar);
 
-	int* HaxeLib_getHaxeArray(int* length);
+	DYNAMIC_LINK int* HaxeLib_getHaxeArray(int* length);
 
-	int64_t* HaxeLib_getHaxeArrayStr(int* length);
+	DYNAMIC_LINK int64_t* HaxeLib_getHaxeArrayStr(int* length);
 
 	/**
 	 * Test the GC behavior, runs on haxe main thread
 	 */
-	void HaxeLib_allocateABunchOfData();
+	DYNAMIC_LINK void HaxeLib_allocateABunchOfData();
 
 	/**
 	 * Test the GC behavior, runs on external (but hxcpp attached) thread
 	 */
-	void HaxeLib_allocateABunchOfDataExternalThread();
+	DYNAMIC_LINK void HaxeLib_allocateABunchOfDataExternalThread();
 
-	enum HaxeLib_IntEnum2 HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract e, const char* s, HaxeLib_EnumAlias a);
+	DYNAMIC_LINK enum HaxeLib_IntEnum2 HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract e, const char* s, HaxeLib_EnumAlias a);
 
-	void HaxeLib_cppCoreTypes(size_t sizet, char char_, const char* constCharStar);
+	DYNAMIC_LINK void HaxeLib_cppCoreTypes(size_t sizet, char char_, const char* constCharStar);
 
 	/**
 	 * single-line doc
 	 */
-	uint64_t HaxeLib_cppCoreTypes2(int i, double f, float s, signed char i8, short i16, int i32, int64_t i64, uint64_t ui64, const char* str);
+	DYNAMIC_LINK uint64_t HaxeLib_cppCoreTypes2(int i, double f, float s, signed char i8, short i16, int i32, int64_t i64, uint64_t ui64, const char* str);
 
-	HaxeObject HaxeLib_createHaxeAnon();
+	DYNAMIC_LINK HaxeObject HaxeLib_createHaxeAnon();
 
-	void HaxeLib_checkHaxeAnon(HaxeObject obj);
+	DYNAMIC_LINK void HaxeLib_checkHaxeAnon(HaxeObject obj);
 
-	void HaxeLib_checkAnonFromPointer(void* haxeObject);
+	DYNAMIC_LINK void HaxeLib_checkAnonFromPointer(void* haxeObject);
 
-	HaxeObject HaxeLib_createHaxeMap();
+	DYNAMIC_LINK HaxeObject HaxeLib_createHaxeMap();
 
-	void HaxeLib_checkHaxeMap(HaxeObject m);
+	DYNAMIC_LINK void HaxeLib_checkHaxeMap(HaxeObject m);
 
-	void HaxeLib_checkNull(HaxeObject m, double f);
+	DYNAMIC_LINK void HaxeLib_checkNull(HaxeObject m, double f);
 
-	HaxeObject HaxeLib_createCustomType();
+	DYNAMIC_LINK HaxeObject HaxeLib_createCustomType();
 
-	void HaxeLib_checkCustomType(HaxeObject x);
+	DYNAMIC_LINK void HaxeLib_checkCustomType(HaxeObject x);
 
-	HaxeString HaxeLib_createHaxeString();
+	DYNAMIC_LINK HaxeString HaxeLib_createHaxeString();
 
-	void HaxeLib_checkHaxeString(HaxeString str);
+	DYNAMIC_LINK void HaxeLib_checkHaxeString(HaxeString str);
 
-	void HaxeLib_throwException();
+	DYNAMIC_LINK void HaxeLib_throwException();
 
-	void HaxeLib_Main_stopLoopingAfterTime_ms(int milliseconds);
+	DYNAMIC_LINK void HaxeLib_Main_stopLoopingAfterTime_ms(int milliseconds);
 
-	int HaxeLib_Main_getLoopCount();
+	DYNAMIC_LINK int HaxeLib_Main_getLoopCount();
 
-	int HaxeLib_Main_hxcppGcMemUsage();
+	DYNAMIC_LINK int HaxeLib_Main_hxcppGcMemUsage();
 
-	int HaxeLib_Main_hxcppGcMemUsageExternal();
+	DYNAMIC_LINK int HaxeLib_Main_hxcppGcMemUsageExternal();
 
-	void HaxeLib_Main_hxcppGcRun(bool major);
+	DYNAMIC_LINK void HaxeLib_Main_hxcppGcRun(bool major);
 
-	void HaxeLib_Main_printTime();
+	DYNAMIC_LINK void HaxeLib_Main_printTime();
 
-	int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate();
+	DYNAMIC_LINK int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate();
 
-	int ExamplePrefix_example();
+	DYNAMIC_LINK int ExamplePrefix_example();
 
-	HaxeObject HaxeLib_Instance_new(HaxeString exampleArg);
+	DYNAMIC_LINK HaxeObject HaxeLib_Instance_new(HaxeString exampleArg);
 
-	void HaxeLib_Instance_methodNoArgs(HaxeObject instance);
+	DYNAMIC_LINK void HaxeLib_Instance_methodNoArgs(HaxeObject instance);
 
-	int HaxeLib_Instance_methodAdd(HaxeObject instance, int a, int b);
+	DYNAMIC_LINK int HaxeLib_Instance_methodAdd(HaxeObject instance, int a, int b);
 
-	HaxeString HaxeLib_Instance_overrideMe(HaxeObject instance);
+	DYNAMIC_LINK HaxeString HaxeLib_Instance_overrideMe(HaxeObject instance);
 
-	void HaxeLib_Instance_staticMethod();
+	DYNAMIC_LINK void HaxeLib_Instance_staticMethod();
 
 #ifdef __cplusplus
 }
 #endif
+
+#undef DYNAMIC_LINK
 
 #endif /* HaxeCBridge_HaxeLib_h */

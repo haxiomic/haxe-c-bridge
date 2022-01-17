@@ -13,10 +13,10 @@
 #include <utility>
 #include <atomic>
 
+#define HAXE_C_BRIDGE_EXPORT
 #include "../HaxeLib.h"
 
 #define HAXE_C_BRIDGE_LINKAGE HXCPP_EXTERN_CLASS_ATTRIBUTES
-
 #include <test/HxPublicApi.h>
 #include <haxe/ds/StringMap.h>
 #include <_Main/CustomType.h>
@@ -30,11 +30,10 @@ namespace HaxeCBridgeInternal {
 	// we cannot use hxcpps HxCreateDetachedThread() because we cannot wait on these threads to end on unix because they are detached threads
 	#if defined(HX_WINDOWS)
 	HANDLE haxeThreadNativeHandle = nullptr;
-	HANDLE getNativeThreadHandle() {
-		return GetCurrentThread();
-	}
+	DWORD haxeThreadNativeId = 0; // 0 is not valid thread id
 	bool createHaxeThread(DWORD (WINAPI *func)(void *), void *param) {
-		return HxCreateDetachedThread(func, param);
+		haxeThreadNativeHandle = CreateThread(NULL, 0, func, param, 0, &haxeThreadNativeId);
+		return haxeThreadNativeHandle != 0;
 	}
 	bool waitForThreadExit(HANDLE handle) {
 		DWORD result = WaitForSingleObject(handle, INFINITE);
@@ -42,16 +41,13 @@ namespace HaxeCBridgeInternal {
 	}
 	#else
 	pthread_t haxeThreadNativeHandle;
-	pthread_t getNativeThreadHandle() {
-		return pthread_self();
-	}
 	bool createHaxeThread(void *(*func)(void *), void *param) {
 		// same as HxCreateDetachedThread(func, param) but without detaching the thread
-		pthread_t t;
+
 		pthread_attr_t attr;
 		if (pthread_attr_init(&attr) != 0)
 			return false;
-		if (pthread_create(&t, &attr, func, param) != 0 )
+		if (pthread_create(&haxeThreadNativeHandle, &attr, func, param) != 0 )
 			return false;
 		if (pthread_attr_destroy(&attr) != 0)
 			return false;
@@ -75,7 +71,6 @@ namespace HaxeCBridgeInternal {
 
 	HxSemaphore threadInitSemaphore;
 	HxMutex threadManageMutex;
-	Dynamic haxeThreadRef;
 
 	void defaultExceptionHandler(const char* info) {
 		printf("Unhandled haxe exception: %s\n", info);
@@ -101,21 +96,25 @@ namespace HaxeCBridgeInternal {
 			pair.first(pair.second);
 		}
 	}
-
+				
+	#if defined(HX_WINDOWS)
 	bool isHaxeMainThread() {
-		hx::NativeAttach autoAttach;
-		Dynamic currentInfo = __hxcpp_thread_current();
-		return HaxeCBridgeInternal::haxeThreadRef.mPtr == currentInfo.mPtr;
+		return threadRunning &&
+		(GetCurrentThreadId() == haxeThreadNativeId) &&
+		(haxeThreadNativeId != 0);
 	}
+	#else
+	bool isHaxeMainThread() {
+		return threadRunning && pthread_equal(haxeThreadNativeHandle, pthread_self());
+	}
+	#endif
 }
 
 THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 	HX_TOP_OF_STACK
-	HaxeCBridgeInternal::haxeThreadNativeHandle = HaxeCBridgeInternal::getNativeThreadHandle();
 	HaxeCBridgeInternal::HaxeThreadData* threadData = (HaxeCBridgeInternal::HaxeThreadData*) data;
-	HaxeCBridgeInternal::haxeThreadRef = __hxcpp_thread_current();
 
-	HaxeCBridgeInternal::threadRunning = true; // must come after haxeThreadRef assignment
+	HaxeCBridgeInternal::threadRunning = true;
 
 	threadData->initExceptionInfo = nullptr;
 
@@ -137,7 +136,7 @@ THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 	if (HaxeCBridgeInternal::staticsInitialized) { // initialized without error
 		// blocks running the event loop
 		// keeps alive until manual stop is called
-		HaxeCBridge::mainThreadInit();
+		HaxeCBridge::mainThreadInit(HaxeCBridgeInternal::isHaxeMainThread);
 		HaxeCBridgeInternal::threadInitSemaphore.Set();
 		HaxeCBridge::mainThreadRun(HaxeCBridgeInternal::processNativeCalls, haxeExceptionCallback);
 	} else {
@@ -149,7 +148,7 @@ THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 
 	THREAD_FUNC_RET
 }
-
+			
 HAXE_C_BRIDGE_LINKAGE
 const char* HaxeLib_initializeHaxeThread(HaxeExceptionCallback unhandledExceptionCallback) {
 	HaxeCBridgeInternal::HaxeThreadData threadData;
@@ -206,7 +205,7 @@ void HaxeLib_stopHaxeThreadIfRunning(bool waitOnScheduledEvents) {
 		}
 	}
 }
-
+			
 HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_releaseHaxeObject(void* objPtr) {
 	struct Callback {
@@ -216,7 +215,7 @@ void HaxeLib_releaseHaxeObject(void* objPtr) {
 	};
 	HaxeCBridgeInternal::runInMainThread(Callback::run, objPtr);
 }
-
+			
 HAXE_C_BRIDGE_LINKAGE
 void HaxeLib_releaseHaxeString(const char* strPtr) {
 	// we use the same release call for all haxe pointers
