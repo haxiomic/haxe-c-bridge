@@ -446,10 +446,10 @@ class HaxeCBridge {
 
 				// we cannot use hxcpps HxCreateDetachedThread() because we cannot wait on these threads to end on unix because they are detached threads
 				#if defined(HX_WINDOWS)
-				DWORD haxeThreadNativeId = 0; // 0 is not valid thread id
 				HANDLE haxeThreadNativeHandle = nullptr;
+				DWORD haxeThreadNativeId = 0; // 0 is not valid thread id
 				bool createHaxeThread(DWORD (WINAPI *func)(void *), void *param) {
-					haxeThreadNativeHandle = CreateThread(NULL, 0, func, param, 0, 0);
+					haxeThreadNativeHandle = CreateThread(NULL, 0, func, param, 0, &haxeThreadNativeId);
 					return haxeThreadNativeHandle != 0;
 				}
 				bool waitForThreadExit(HANDLE handle) {
@@ -529,9 +529,6 @@ class HaxeCBridge {
 
 			THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 				HX_TOP_OF_STACK
-				#if defined(HX_WINDOWS)
-				HaxeCBridgeInternal::haxeThreadNativeId = GetCurrentThreadId();
-				#endif 
 				HaxeCBridgeInternal::HaxeThreadData* threadData = (HaxeCBridgeInternal::HaxeThreadData*) data;
 
 				HaxeCBridgeInternal::threadRunning = true;
