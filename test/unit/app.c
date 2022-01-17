@@ -4,11 +4,46 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <assert.h>
-#include <time.h>
 #include <inttypes.h>
 #include <stdbool.h>
+
+#ifdef _WIN32
+	// windows specific
+	#include <windows.h>
+
+	// time.h implementation https://stackoverflow.com/a/31335254
+	struct timespec { long tv_sec; long tv_nsec; };   //header part
+	#define exp7           10000000i64     //1E+7     //C-file part
+	#define exp9         1000000000i64     //1E+9
+	#define w2ux 116444736000000000i64     //1.jan1601 to 1.jan1970
+	#define CLOCK_REALTIME 0
+	
+	void unix_time(struct timespec *spec)
+	{  __int64 wintime; GetSystemTimeAsFileTime((FILETIME*)&wintime); 
+	wintime -=w2ux;  spec->tv_sec  =wintime / exp7;                 
+						spec->tv_nsec =wintime % exp7 *100;
+	}
+
+	int clock_gettime(int _, struct timespec *spec)
+	{  static  struct timespec startspec; static double ticks2nano;
+	static __int64 startticks, tps =0;    __int64 tmp, curticks;
+	QueryPerformanceFrequency((LARGE_INTEGER*)&tmp); //some strange system can
+	if (tps !=tmp) { tps =tmp; //init ~~ONCE         //possibly change freq ?
+						QueryPerformanceCounter((LARGE_INTEGER*)&startticks);
+						unix_time(&startspec); ticks2nano =(double)exp9 / tps; }
+	QueryPerformanceCounter((LARGE_INTEGER*)&curticks); curticks -=startticks;
+	spec->tv_sec  =startspec.tv_sec   +         (curticks / tps);
+	spec->tv_nsec =startspec.tv_nsec  + (double)(curticks % tps) * ticks2nano;
+			if (!(spec->tv_nsec < exp9)) { spec->tv_sec++; spec->tv_nsec -=exp9; }
+	return 0;
+	}
+	
+
+#else
+	#include <time.h>
+	#include <unistd.h>
+#endif
 
 #define log(str) printf("%s:%d: " str "\n", __FILE__, __LINE__)
 #define logf(fmt, ...) printf("%s:%d: " fmt "\n", __FILE__, __LINE__, __VA_ARGS__)
@@ -184,7 +219,11 @@ int main(void) {
 
 	// sleep one second and verify the haxe thread event loop continued to run
 	log("sleeping 1s to let the haxe thread event loop run");
+	#ifdef _WIN32
+	Sleep(1000);
+	#else
 	sleep(1);
+	#endif
 	logf("-> HaxeLib_Main_getLoopCount() => %d", HaxeLib_Main_getLoopCount());
 	assert(HaxeLib_Main_getLoopCount() > 2);
 
