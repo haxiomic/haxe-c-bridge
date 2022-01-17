@@ -412,8 +412,8 @@ class HaxeCBridge {
 			#include <atomic>
 
 			#include "../${namespace}.h"
-
-			#define HAXE_C_BRIDGE_LINKAGE HXCPP_EXTERN_CLASS_ATTRIBUTES
+			
+			#define HAXE_C_BRIDGE_LINKAGE 
 
 		')
 		+ ctx.implementationIncludes.map(CPrinter.printInclude).join('\n') + '\n'
