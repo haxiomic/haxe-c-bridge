@@ -528,11 +528,7 @@ class HaxeCBridge {
 				}
 				#else
 				bool isHaxeMainThread() {
-					hx::NativeAttach autoAttach;
-					Dynamic currentInfo = __hxcpp_thread_current();
-					return
-						(HaxeCBridgeInternal::haxeThreadRef.mPtr == currentInfo.mPtr) &&
-						(HaxeCBridgeInternal::haxeThreadRef.mPtr != nullptr);
+					return pthread_equal(haxeThreadNativeHandle, pthread_self());
 				}
 				#endif
 			}
