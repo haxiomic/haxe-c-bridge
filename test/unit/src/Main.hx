@@ -45,6 +45,7 @@ class Main {
 	static public function stopLoopingAfterTime_ms(milliseconds: Int) {
 		haxe.Timer.delay(() -> {
 			if (loopTimer != null) {
+				trace("stoping infinite timer loop");
 				loopTimer.stop();
 			}
 		}, milliseconds);
