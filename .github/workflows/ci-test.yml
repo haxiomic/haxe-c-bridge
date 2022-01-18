@@ -18,17 +18,15 @@ jobs:
       - name: "installing"
         run: |
           cd test/unit/
-          lix download haxe 4.0.5
           lix download haxe latest
-          lix download haxe nightly
           lix download
       - name: "testing"
         run: |
           cd test/unit
-          # echo "Testing latest (via lix)"
-          # lix use haxe latest
-          ./run.win.cmd
-          ls
+          echo "Testing latest (via lix)"
+          lix use haxe latest
+
+          haxe build-library.hxml
 
           cl .\app.c /I .\haxe-bin\ /Zi /link .\haxe-bin\obj\lib\Main-debug.lib /DEBUG
 
@@ -36,13 +34,6 @@ jobs:
           copy .\haxe-bin\obj\lib\Main-debug.pdb Main-debug.pdb
 
           ./app.exe
-
-          # echo "Testing latest (via lix)"
-          # lix use haxe latest
-          # ./run.win.cmd
-          # echo "Testing nightly (via lix)"
-          # lix use haxe nightly
-          # ./run.win.cmd
         env:
           CI: true
 
