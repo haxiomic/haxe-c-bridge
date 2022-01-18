@@ -31,7 +31,6 @@ jobs:
           cl .\app.c /I .\haxe-bin\ /Zi /link .\haxe-bin\obj\lib\Main-debug.lib /DEBUG
 
           copy haxe-bin\Main-debug.dll Main-debug.dll
-          copy .\haxe-bin\obj\lib\Main-debug.pdb Main-debug.pdb
 
           ./app.exe
         env:
