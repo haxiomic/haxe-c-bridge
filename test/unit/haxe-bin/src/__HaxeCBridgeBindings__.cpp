@@ -13,7 +13,11 @@
 #include <utility>
 #include <atomic>
 
-#define HAXE_C_BRIDGE_EXPORT
+// include generated bindings header
+// set prefix when exporting dll symbols on windows
+#ifdef _WIN32
+	#define API_PREFIX __declspec(dllexport)
+#endif
 #include "../HaxeLib.h"
 
 #define HAXE_C_BRIDGE_LINKAGE HXCPP_EXTERN_CLASS_ATTRIBUTES
