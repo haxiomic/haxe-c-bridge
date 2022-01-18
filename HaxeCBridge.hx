@@ -335,7 +335,7 @@ class HaxeCBridge {
 			} else i - j;
 		});
 
-		var prefix = isDynamicLink() ? 'DYNAMIC_LINK' : '';
+		var prefix = isDynamicLink() ? 'API_PREFIX' : '';
 		
 		return code('
 			/**
@@ -354,14 +354,12 @@ class HaxeCBridge {
 
 			+ (if (isDynamicLink()) {
 				code('
-					#ifdef _WIN32
-						#ifdef HAXE_C_BRIDGE_EXPORT
-							#define DYNAMIC_LINK __declspec(dllexport)
+					#ifndef API_PREFIX
+						#ifdef _WIN32
+							#define API_PREFIX __declspec(dllimport)
 						#else
-							#define DYNAMIC_LINK __declspec(dllimport)
+							#define API_PREFIX
 						#endif
-					#else
-						#define DYNAMIC_LINK
 					#endif
 
 				');
@@ -411,7 +409,7 @@ class HaxeCBridge {
 			}
 			#endif
 
-			#undef DYNAMIC_LINK
+			#undef API_PREFIX
 
 			#endif /* HaxeCBridge_${namespace}_h */
 		');
@@ -434,7 +432,18 @@ class HaxeCBridge {
 			#include <utility>
 			#include <atomic>
 
-			#define HAXE_C_BRIDGE_EXPORT
+			// include generated bindings header
+		')
+		+ (if (isDynamicLink()) code('
+			// set prefix when exporting dll symbols on windows
+			#ifdef _WIN32
+				#define API_PREFIX __declspec(dllexport)
+			#endif
+		')
+		else
+			''
+		)
+		+ code('
 			#include "../${namespace}.h"
 
 			#define HAXE_C_BRIDGE_LINKAGE HXCPP_EXTERN_CLASS_ATTRIBUTES
