@@ -26,15 +26,25 @@ jobs:
           cd test/unit
           echo "Testing 4.0.5"
           lix use haxe 4.0.5
-          ./run.win.bat
+          ./run.win.cmd
           ls
+
+          @REM compile app.c to app.exe
+          cl .\app.c /I .\haxe-bin\ /Zi /link .\haxe-bin\obj\lib\Main-debug.lib /DEBUG || exit /b
+
+          @REM copy the library dll locally for running
+          copy haxe-bin\Main-debug.dll Main-debug.dll
+          @REM copy the debugging info locally
+          copy .\haxe-bin\obj\lib\Main-debug.pdb Main-debug.pdb
+
           ./app.exe
+
           # echo "Testing latest (via lix)"
           # lix use haxe latest
-          # ./run.win.bat
+          # ./run.win.cmd
           # echo "Testing nightly (via lix)"
           # lix use haxe nightly
-          # ./run.win.bat
+          # ./run.win.cmd
         env:
           CI: true
 
