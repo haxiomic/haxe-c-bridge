@@ -29,12 +29,9 @@ jobs:
           ./run.win.cmd
           ls
 
-          @REM compile app.c to app.exe
           cl .\app.c /I .\haxe-bin\ /Zi /link .\haxe-bin\obj\lib\Main-debug.lib /DEBUG || exit /b
 
-          @REM copy the library dll locally for running
           copy haxe-bin\Main-debug.dll Main-debug.dll
-          @REM copy the debugging info locally
           copy .\haxe-bin\obj\lib\Main-debug.pdb Main-debug.pdb
 
           ./app.exe
