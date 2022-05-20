@@ -14,9 +14,9 @@
 
 	// time.h implementation https://stackoverflow.com/a/31335254
 	struct timespec { long tv_sec; long tv_nsec; };   //header part
-	#define exp7           10000000i64     //1E+7     //C-file part
-	#define exp9         1000000000i64     //1E+9
-	#define w2ux 116444736000000000i64     //1.jan1601 to 1.jan1970
+	#define exp7           10000000LL     //1E+7     //C-file part
+	#define exp9         1000000000LL     //1E+9
+	#define w2ux 116444736000000000LL     //1.jan1601 to 1.jan1970
 	#define CLOCK_REALTIME 0
 	
 	void unix_time(struct timespec *spec)
