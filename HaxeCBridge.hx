@@ -30,7 +30,7 @@
 
 	// fast path for when code gen isn't required
 	// disable this to get auto-complete when editing this file
-	#if (display || display_details || target.name != cpp || cppia)
+	#if false
 
 class HaxeCBridge {
 	public static function expose(?namespace: String)
@@ -233,7 +233,7 @@ class HaxeCBridge {
 							t: TInst(clsRef, []), // return a instance of this class
 						}
 						case Member:
-							var instanceTArg: TVar = {id: -1, name: 'instance', t: TInst(clsRef, []), meta: null, capture: false, extra: null};
+							var instanceTArg: TVar = {id: -1, name: 'instance', t: TInst(clsRef, []), meta: null, capture: false, extra: null, isStatic: false};
 							{
 								args: [{v: instanceTArg, value: null}].concat(tfunc.args),
 								expr: tfunc.expr,
