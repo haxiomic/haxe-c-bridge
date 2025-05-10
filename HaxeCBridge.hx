@@ -1761,20 +1761,39 @@ class HaxeCBridge {
 		// we can convert the ptr to int64
 		// https://stackoverflow.com/a/21250110
 		var ptrInt64: Int64 = untyped __cpp__('reinterpret_cast<int64_t>({0})', ptr);
-		Internal.gcRetainMap.set(ptrInt64, haxeObject);
+		inline retainPtr(ptrInt64, haxeObject);
 		return ptr;
 	}
 
 	static public inline function retainHaxeString(haxeString: String): cpp.ConstCharStar {
 		var cStrPtr: cpp.ConstCharStar = cpp.ConstCharStar.fromString(haxeString);
 		var ptrInt64: Int64 = untyped __cpp__('reinterpret_cast<int64_t>({0})', cStrPtr);
-		Internal.gcRetainMap.set(ptrInt64, haxeString);
+		inline retainPtr(ptrInt64, haxeString);
 		return cStrPtr;
+	}
+
+	static private function retainPtr(ptrInt64: Int64, haxeObject: Dynamic) {
+		// check if we already have a reference to this object
+		var store = Internal.gcRetainMap.get(ptrInt64);
+		if (store == null) {
+			// if not, create a new entry
+			store = {refCount: 1, value: haxeObject};
+			Internal.gcRetainMap.set(ptrInt64, store);
+		} else {
+			// if so, increment the reference count
+			store.refCount++;
+		}
 	}
 
 	static public inline function releaseHaxePtr(haxePtr: Star<cpp.Void>) {
 		var ptrInt64: Int64 = untyped __cpp__('reinterpret_cast<int64_t>({0})', haxePtr);
-		Internal.gcRetainMap.remove(ptrInt64);
+		var store = Internal.gcRetainMap.get(ptrInt64);
+		if (store != null && store.refCount > 0) {
+			store.refCount--;
+			if (store.refCount <= 0) {
+				Internal.gcRetainMap.remove(ptrInt64);
+			}
+		}
 	}
 
 	@:noCompletion
@@ -1807,7 +1826,10 @@ private class Internal {
 	public static var mainThreadWaitLock: Lock;
 	public static var mainThreadLoopActive: Bool = true;
 	public static var mainThreadEndIfNoPending: Bool = false;
-	public static final gcRetainMap = new Map<Int64, Dynamic>();
+	public static final gcRetainMap = new Map<Int64, {
+		refCount: Int,
+		value: Dynamic
+	}>();
 }
 
 #if (haxe_ver >= 4.2)
