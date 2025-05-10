@@ -958,7 +958,11 @@ class CPrinter {
 		var name = signature.name;
 		var args = signature.args;
 		var ret = signature.ret;
-		return '${printType(ret)} $name(${args.map(arg -> '${printType(arg.type)} ${arg.name}').join(', ')})';
+		return '${printType(ret)} $name(${
+			args.length == 0 ?
+				'void' :
+				args.map(arg -> '${printType(arg.type)} ${arg.name}').join(', ')
+		})';
 	}
 
 	public static function printDoc(doc: String) {

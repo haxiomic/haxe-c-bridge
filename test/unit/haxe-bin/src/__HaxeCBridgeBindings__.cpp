@@ -261,7 +261,7 @@ void HaxeLib_voidRtn(int a0, HaxeString a1, HaxeLib_NonTrivialAlias a2, HaxeLib_
 }
 
 HAXE_C_BRIDGE_LINKAGE
-void HaxeNoArgsNoReturn() {
+void HaxeNoArgsNoReturn(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::noArgsNoReturn();
 	}
@@ -625,7 +625,7 @@ int64_t* HaxeLib_getHaxeArrayStr(int* a0) {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-void HaxeLib_allocateABunchOfData() {
+void HaxeLib_allocateABunchOfData(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::allocateABunchOfData();
 	}
@@ -659,7 +659,7 @@ void HaxeLib_allocateABunchOfData() {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-void HaxeLib_allocateABunchOfDataExternalThread() {
+void HaxeLib_allocateABunchOfDataExternalThread(void) {
 	hx::NativeAttach autoAttach;
 	return test::HxPublicApi_obj::allocateABunchOfDataExternalThread();
 }
@@ -771,7 +771,7 @@ uint64_t HaxeLib_cppCoreTypes2(int a0, double a1, float a2, signed char a3, shor
 }
 
 HAXE_C_BRIDGE_LINKAGE
-HaxeObject HaxeLib_createHaxeAnon() {
+HaxeObject HaxeLib_createHaxeAnon(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return HaxeCBridge::retainHaxeObject(test::HxPublicApi_obj::createHaxeAnon());
 	}
@@ -875,7 +875,7 @@ void HaxeLib_checkAnonFromPointer(void* a0) {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-HaxeObject HaxeLib_createHaxeMap() {
+HaxeObject HaxeLib_createHaxeMap(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return HaxeCBridge::retainHaxeObject(test::HxPublicApi_obj::createHaxeMap());
 	}
@@ -979,7 +979,7 @@ void HaxeLib_checkNull(HaxeObject a0, double a1) {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-HaxeObject HaxeLib_createCustomType() {
+HaxeObject HaxeLib_createCustomType(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return HaxeCBridge::retainHaxeObject(test::HxPublicApi_obj::createCustomType());
 	}
@@ -1049,7 +1049,7 @@ void HaxeLib_checkCustomType(HaxeObject a0) {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-HaxeString HaxeLib_createHaxeString() {
+HaxeString HaxeLib_createHaxeString(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return HaxeCBridge::retainHaxeString(test::HxPublicApi_obj::createHaxeString());
 	}
@@ -1119,7 +1119,7 @@ void HaxeLib_checkHaxeString(HaxeString a0) {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-void HaxeLib_throwException() {
+void HaxeLib_throwException(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return test::HxPublicApi_obj::throwException();
 	}
@@ -1187,7 +1187,7 @@ void HaxeLib_Main_stopLoopingAfterTime_ms(int a0) {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-int HaxeLib_Main_getLoopCount() {
+int HaxeLib_Main_getLoopCount(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return Main_obj::getLoopCount();
 	}
@@ -1223,7 +1223,7 @@ int HaxeLib_Main_getLoopCount() {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-int HaxeLib_Main_hxcppGcMemUsage() {
+int HaxeLib_Main_hxcppGcMemUsage(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return Main_obj::hxcppGcMemUsage();
 	}
@@ -1259,7 +1259,7 @@ int HaxeLib_Main_hxcppGcMemUsage() {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-int HaxeLib_Main_hxcppGcMemUsageExternal() {
+int HaxeLib_Main_hxcppGcMemUsageExternal(void) {
 	hx::NativeAttach autoAttach;
 	return Main_obj::hxcppGcMemUsageExternal();
 }
@@ -1299,7 +1299,7 @@ void HaxeLib_Main_hxcppGcRun(bool a0) {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-void HaxeLib_Main_printTime() {
+void HaxeLib_Main_printTime(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return Main_obj::printTime();
 	}
@@ -1333,7 +1333,7 @@ void HaxeLib_Main_printTime() {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate() {
+int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return pack::_ExampleClass::ExampleClassPrivate::examplePrivate();
 	}
@@ -1369,7 +1369,7 @@ int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate() {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-int ExamplePrefix_example() {
+int ExamplePrefix_example(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return pack::ExampleClass_obj::example();
 	}
@@ -1547,7 +1547,7 @@ HaxeString HaxeLib_Instance_overrideMe(HaxeObject a0) {
 }
 
 HAXE_C_BRIDGE_LINKAGE
-void HaxeLib_Instance_staticMethod() {
+void HaxeLib_Instance_staticMethod(void) {
 	if (HaxeCBridgeInternal::isHaxeMainThread()) {
 		return Instance_obj::staticMethod();
 	}

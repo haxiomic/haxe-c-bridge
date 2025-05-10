@@ -111,7 +111,7 @@ extern "C" {
 	 */
 	API_PREFIX void HaxeLib_voidRtn(int a, HaxeString b, HaxeLib_NonTrivialAlias c, HaxeLib_EnumAlias e);
 
-	API_PREFIX void HaxeNoArgsNoReturn();
+	API_PREFIX void HaxeNoArgsNoReturn(void);
 
 	/**
 	 * when called externally from C this function will be executed synchronously on the main thread
@@ -143,12 +143,12 @@ extern "C" {
 	/**
 	 * Test the GC behavior, runs on haxe main thread
 	 */
-	API_PREFIX void HaxeLib_allocateABunchOfData();
+	API_PREFIX void HaxeLib_allocateABunchOfData(void);
 
 	/**
 	 * Test the GC behavior, runs on external (but hxcpp attached) thread
 	 */
-	API_PREFIX void HaxeLib_allocateABunchOfDataExternalThread();
+	API_PREFIX void HaxeLib_allocateABunchOfDataExternalThread(void);
 
 	API_PREFIX enum HaxeLib_IntEnum2 HaxeLib_enumTypes(enum HaxeLib_IntEnumAbstract e, const char* s, HaxeLib_EnumAlias a);
 
@@ -159,43 +159,43 @@ extern "C" {
 	 */
 	API_PREFIX uint64_t HaxeLib_cppCoreTypes2(int i, double f, float s, signed char i8, short i16, int i32, int64_t i64, uint64_t ui64, const char* str);
 
-	API_PREFIX HaxeObject HaxeLib_createHaxeAnon();
+	API_PREFIX HaxeObject HaxeLib_createHaxeAnon(void);
 
 	API_PREFIX void HaxeLib_checkHaxeAnon(HaxeObject obj);
 
 	API_PREFIX void HaxeLib_checkAnonFromPointer(void* haxeObject);
 
-	API_PREFIX HaxeObject HaxeLib_createHaxeMap();
+	API_PREFIX HaxeObject HaxeLib_createHaxeMap(void);
 
 	API_PREFIX void HaxeLib_checkHaxeMap(HaxeObject m);
 
 	API_PREFIX void HaxeLib_checkNull(HaxeObject m, double f);
 
-	API_PREFIX HaxeObject HaxeLib_createCustomType();
+	API_PREFIX HaxeObject HaxeLib_createCustomType(void);
 
 	API_PREFIX void HaxeLib_checkCustomType(HaxeObject x);
 
-	API_PREFIX HaxeString HaxeLib_createHaxeString();
+	API_PREFIX HaxeString HaxeLib_createHaxeString(void);
 
 	API_PREFIX void HaxeLib_checkHaxeString(HaxeString str);
 
-	API_PREFIX void HaxeLib_throwException();
+	API_PREFIX void HaxeLib_throwException(void);
 
 	API_PREFIX void HaxeLib_Main_stopLoopingAfterTime_ms(int milliseconds);
 
-	API_PREFIX int HaxeLib_Main_getLoopCount();
+	API_PREFIX int HaxeLib_Main_getLoopCount(void);
 
-	API_PREFIX int HaxeLib_Main_hxcppGcMemUsage();
+	API_PREFIX int HaxeLib_Main_hxcppGcMemUsage(void);
 
-	API_PREFIX int HaxeLib_Main_hxcppGcMemUsageExternal();
+	API_PREFIX int HaxeLib_Main_hxcppGcMemUsageExternal(void);
 
 	API_PREFIX void HaxeLib_Main_hxcppGcRun(bool major);
 
-	API_PREFIX void HaxeLib_Main_printTime();
+	API_PREFIX void HaxeLib_Main_printTime(void);
 
-	API_PREFIX int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate();
+	API_PREFIX int HaxeLib_pack__ExampleClass_ExampleClassPrivate_examplePrivate(void);
 
-	API_PREFIX int ExamplePrefix_example();
+	API_PREFIX int ExamplePrefix_example(void);
 
 	API_PREFIX HaxeObject HaxeLib_Instance_new(HaxeString exampleArg);
 
@@ -205,7 +205,7 @@ extern "C" {
 
 	API_PREFIX HaxeString HaxeLib_Instance_overrideMe(HaxeObject instance);
 
-	API_PREFIX void HaxeLib_Instance_staticMethod();
+	API_PREFIX void HaxeLib_Instance_staticMethod(void);
 
 #ifdef __cplusplus
 }

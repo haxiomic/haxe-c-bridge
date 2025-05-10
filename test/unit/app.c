@@ -60,11 +60,11 @@ void assertCallback(bool v) {
 }
 
 // callback testing
-void fnVoid() {
+void fnVoid(void) {
 	// check we can still call the exposed C methods while in the haxe thread
 	assert(HaxeLib_add(3, 4) == 7);
 }
-int fnInt() {return 42;}
+int fnInt(void) {return 42;}
 const char* fnIntString(int i) {
 	assert(i == 42);
 	static const char* str = "hi";
