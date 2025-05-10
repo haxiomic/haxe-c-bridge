@@ -233,7 +233,18 @@ class HaxeCBridge {
 							t: TInst(clsRef, []), // return a instance of this class
 						}
 						case Member:
-							var instanceTArg: TVar = {id: -1, name: 'instance', t: TInst(clsRef, []), meta: null, capture: false, extra: null, isStatic: false};
+							var instanceTArg: TVar = {
+								id: -1,
+								name: 'instance',
+								t: TInst(clsRef, []),
+								meta: null,
+								capture: false,
+								extra: null,
+								// only in haxe 4.3
+								#if (haxe_ver >= 4.3)
+									isStatic: false
+								#end
+							};
 							{
 								args: [{v: instanceTArg, value: null}].concat(tfunc.args),
 								expr: tfunc.expr,
