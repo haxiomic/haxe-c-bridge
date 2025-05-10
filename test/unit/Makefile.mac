@@ -3,7 +3,7 @@ HAXE_BIN=haxe-bin
 HAXE_LIB=Main-debug.dylib
 
 CC=clang
-CFLAGS=-Wall -g -pedantic -fsanitize=thread -fno-omit-frame-pointer -std=c99 $(HAXE_BIN)/$(HAXE_LIB) -Wl,-rpath,$(HAXE_BIN)
+CFLAGS=-Wall -g -pedantic -fsanitize=address -fno-omit-frame-pointer -std=c99 $(HAXE_BIN)/$(HAXE_LIB) -Wl,-rpath,$(HAXE_BIN)
 
 all: $(HAXE_BIN)/$(HAXE_LIB) $(EXE)
 # tell $(EXE) where the dynamic library is located
