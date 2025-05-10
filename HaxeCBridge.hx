@@ -1807,71 +1807,7 @@ private class Internal {
 	public static var mainThreadWaitLock: Lock;
 	public static var mainThreadLoopActive: Bool = true;
 	public static var mainThreadEndIfNoPending: Bool = false;
-	public static final gcRetainMap = new Int64Map<Dynamic>();
-}
-
-/**
-	Implements an Int64 map via two Int32 maps, using the low and high parts as keys
-	we need @Aidan63's PR to land before we can use Map<Int64, Dynamic>
-	https://github.com/HaxeFoundation/hxcpp/pull/932
-**/
-abstract Int64Map<T>(Map<Int, Map<Int, T>>) {
-
-	public function new() {
-		this = new Map<Int, Map<Int, T>>();
-	}
-
-	public inline function set(key: Int64, value: T) {
-		var low: Int = low32(key);
-		var high: Int = high32(key);
-
-		// low will vary faster and alias less, so use low as primary key
-		var highMap = this.get(low);
-		if (highMap == null) {
-			highMap = new Map<Int, T>();
-			this.set(low, highMap);
-		}
-
-		highMap.set(high, value);
-	}
-
-	public inline function get(key: Int64): Null<T> {
-		var low: Int = low32(key);
-		var high: Int = high32(key);
-		var highMap = this.get(low);
-		return (highMap != null) ? highMap.get(high): null;
-	}
-
-	public inline function remove(key: Int64): Bool {
-		var low: Int = low32(key);
-		var high: Int = high32(key);
-		var highMap = this.get(low);
-
-		return if (highMap != null) {
-			var removed = highMap.remove(high);
-			var isHighMapEmpty = true;
-			for (k in highMap.keys()) {
-				isHighMapEmpty = false;
-				break;
-			}
-			// if the high map has no more keys we can dispose of it (so that we don't have empty maps left for unused low keys)
-			if (isHighMapEmpty) {
-				this.remove(low);
-			}
-			return removed;
-		} else {
-			false;
-		}
-	}
-
-	inline function high32(key: Int64): Int {
-		return untyped __cpp__('{0} >> 32', key);
-	}
-
-	inline function low32(key: Int64): Int {
-		return untyped __cpp__('{0} & 0xffffffff', key);
-	}
-
+	public static final gcRetainMap = new Map<Int64, Dynamic>();
 }
 
 #if (haxe_ver >= 4.2)
