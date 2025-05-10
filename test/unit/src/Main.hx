@@ -15,11 +15,11 @@ import HaxeCBridge.HaxeObject;
 <section if="macos">
 	<files id="haxe">
 		<compilerflag value="-fno-omit-frame-pointer" />
-		<compilerflag value="-fsanitize=address" />
+		<compilerflag value="-fsanitize=thread" />
 	</files>
 	<linker id="dll">
 		<flag value="-fno-omit-frame-pointer" />
-		<flag value="-fsanitize=address" />
+		<flag value="-fsanitize=thread" />
 	</linker>
 </section>
 ')
@@ -45,7 +45,7 @@ class Main {
 	static public function stopLoopingAfterTime_ms(milliseconds: Int) {
 		haxe.Timer.delay(() -> {
 			if (loopTimer != null) {
-				trace("stoping infinite timer loop");
+				trace("stopping infinite timer loop");
 				loopTimer.stop();
 			}
 		}, milliseconds);
