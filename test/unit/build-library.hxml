@@ -10,6 +10,10 @@
 --cpp haxe-bin
 --dce full
 
+# hxcpp flags
+# try removing this if you get arch errors!
+-D HXCPP_ARM64
+
 # hxpp flags
 # for information see https://github.com/HaxeFoundation/hxcpp/blob/master/docs/build_xml/Defines.md
 -D dll_link
