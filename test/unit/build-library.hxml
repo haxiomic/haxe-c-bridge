@@ -10,9 +10,6 @@
 --cpp haxe-bin
 --dce full
 
-# compile for 64 bit
--D HXCPP_M64
-
 # hxpp flags
 # for information see https://github.com/HaxeFoundation/hxcpp/blob/master/docs/build_xml/Defines.md
 -D dll_link
