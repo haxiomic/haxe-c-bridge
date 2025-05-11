@@ -100,6 +100,11 @@ namespace HaxeCBridgeInternal {
 			pair.first(pair.second);
 		}
 	}
+
+	bool hasPendingNativeCalls() {
+		AutoLock lock(queueMutex);
+		return !queue.empty();
+	}
 				
 	#if defined(HX_WINDOWS)
 	bool isHaxeMainThread() {
@@ -142,7 +147,11 @@ THREAD_FUNC_TYPE haxeMainThreadFunc(void *data) {
 		// keeps alive until manual stop is called
 		HaxeCBridge::mainThreadInit(HaxeCBridgeInternal::isHaxeMainThread);
 		HaxeCBridgeInternal::threadInitSemaphore.Set();
-		HaxeCBridge::mainThreadRun(HaxeCBridgeInternal::processNativeCalls, haxeExceptionCallback);
+		HaxeCBridge::mainThreadRun(
+			HaxeCBridgeInternal::processNativeCalls,
+			HaxeCBridgeInternal::hasPendingNativeCalls,
+			haxeExceptionCallback
+		);
 	} else {
 		// failed to initialize statics; unlock init semaphore so _initializeHaxeThread can continue and report the exception 
 		HaxeCBridgeInternal::threadInitSemaphore.Set();

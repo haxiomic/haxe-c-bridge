@@ -533,6 +533,11 @@ class HaxeCBridge {
 						pair.first(pair.second);
 					}
 				}
+
+				bool hasPendingNativeCalls() {
+					AutoLock lock(queueMutex);
+					return !queue.empty();
+				}
 				
 				#if defined(HX_WINDOWS)
 				bool isHaxeMainThread() {
@@ -575,7 +580,11 @@ class HaxeCBridge {
 					// keeps alive until manual stop is called
 					HaxeCBridge::mainThreadInit(HaxeCBridgeInternal::isHaxeMainThread);
 					HaxeCBridgeInternal::threadInitSemaphore.Set();
-					HaxeCBridge::mainThreadRun(HaxeCBridgeInternal::processNativeCalls, haxeExceptionCallback);
+					HaxeCBridge::mainThreadRun(
+						HaxeCBridgeInternal::processNativeCalls,
+						HaxeCBridgeInternal::hasPendingNativeCalls,
+						haxeExceptionCallback
+					);
 				} else {
 					// failed to initialize statics; unlock init semaphore so _initializeHaxeThread can continue and report the exception 
 					HaxeCBridgeInternal::threadInitSemaphore.Set();
@@ -1687,7 +1696,11 @@ class HaxeCBridge {
 	}
 
 	@:noCompletion
-	static public function mainThreadRun(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
+	static public function mainThreadRun(
+		processNativeCalls: cpp.Callable<Void -> Void>,
+		hasPendingNativeCalls: cpp.Callable<Void -> Bool>,
+		onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>
+	) @:privateAccess {
 		try {
 			runUserMain();
 		} catch (e: Any) {
@@ -1695,16 +1708,30 @@ class HaxeCBridge {
 		}
 
 		// run always-alive event loop
-		var eventLoop:CustomEventLoop = Thread.current().events;
+		var eventLoop = Thread.current().events;
 
-		var events = [];
+		var recycleRegular = [];
+		var recycleOneTimers = [];
 		while(Internal.mainThreadLoopActive) {
 			try {
+				// adapted from EventLoop.loop()
+				// difference is this code will break if no events are scheduled and mainThreadEndIfNoPending is true
+				// (otherwise it will wait for a wakeup() call)
+
 				// execute any queued native callbacks
 				processNativeCalls();
 
-				// adapted from EventLoop.loop()
-				var eventTickInfo = eventLoop.customProgress(Sys.time(), events);
+				// drains Internal.mainThreadWaitLock()
+				// this is a problem because if wakeMainThread() is called from another thread here
+				// the main thread will stay asleep because the haxe events have been processed but not the native ones
+				var eventTickInfo = eventLoop.__progress(Sys.time(), recycleRegular, recycleOneTimers);
+
+				// since the processEvents() drains the wait lock, we must check again if new pending native calls were scheduled
+				// if so, loop again
+				if (hasPendingNativeCalls()) {
+					continue;
+				}
+
 				switch (eventTickInfo.nextEventAt) {
 					case -2: // continue to next loop, assume events could have been scheduled
 					case -1:
@@ -1733,7 +1760,11 @@ class HaxeCBridge {
 	}
 
 	@:noCompletion
-	static public function mainThreadRun(processNativeCalls: cpp.Callable<Void -> Void>, onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>) @:privateAccess {
+	static public function mainThreadRun(
+		processNativeCalls: cpp.Callable<Void -> Void>,
+		hasPendingNativeCalls: cpp.Callable<Void -> Bool>,
+		onUnhandledException: cpp.Callable<cpp.ConstCharStar -> Void>
+	) @:privateAccess {
 		try {
 			runUserMain();
 		} catch (e: Any) {
@@ -1747,6 +1778,13 @@ class HaxeCBridge {
 
 				// adapted from EntryPoint.run()
 				var nextTick = EntryPoint.processEvents();
+				
+				// since the processEvents() drains the wait lock, we must check again if new pending native calls were scheduled
+				// if so, loop again
+				if (hasPendingNativeCalls()) {
+					continue;
+				}
+
 				if (nextTick < 0) {
 					if (Internal.mainThreadEndIfNoPending) {
 						// no events scheduled in the future and not waiting on any promises
@@ -1906,75 +1944,6 @@ abstract Int64Map<T>(Map<Int, Map<Int, T>>) {
 
 	inline function low32(key: Int64): Int {
 		return untyped __cpp__('{0} & 0xffffffff', key);
-	}
-
-}
-#end
-
-#if (haxe_ver >= 4.2)
-@:forward
-@:access(sys.thread.EventLoop)
-abstract CustomEventLoop(sys.thread.EventLoop) from sys.thread.EventLoop {
-
-	// same as __progress but it doesn't reset the wait lock
-	// this is because resetting the wait lock here can mean wake-up lock releases are missed
-	// and we cannot resolve by only waking up with in the mutex because this interacts with the hxcpp GC (and we want to wake-up from a non-hxcpp-attached thread)
-	public inline function customProgress(now:Float, recycle:Array<()->Void>):{nextEventAt:Float, anyTime:Bool} {
-		var eventsToRun = recycle;
-		var eventsToRunIdx = 0;
-		// When the next event is expected to run
-		var nextEventAt:Float = -1;
-
-		this.mutex.acquire();
-		// @edit: don't reset the wait lock (see above)
-		// while(waitLock.wait(0.0)) {}
-		// Collect regular events to run
-		var current = this.regularEvents;
-		while(current != null) {
-			if(current.nextRunTime <= now) {
-				eventsToRun[eventsToRunIdx++] = current.run;
-				current.nextRunTime += current.interval;
-				nextEventAt = -2;
-			} else if(nextEventAt == -1 || current.nextRunTime < nextEventAt) {
-				nextEventAt = current.nextRunTime;
-			}
-			current = current.next;
-		}
-		this.mutex.release();
-
-		// Run regular events
-		for(i in 0...eventsToRunIdx) {
-			eventsToRun[i]();
-			eventsToRun[i] = null;
-		}
-		eventsToRunIdx = 0;
-
-		// Collect pending one-time events
-		this.mutex.acquire();
-		for(i => event in this.oneTimeEvents) {
-			switch event {
-				case null:
-					break;
-				case _:
-					eventsToRun[eventsToRunIdx++] = event;
-					this.oneTimeEvents[i] = null;
-			}
-		}
-		this.oneTimeEventsIdx = 0;
-		var hasPromisedEvents = this.promisedEventsCount > 0;
-		this.mutex.release();
-
-		//run events
-		for(i in 0...eventsToRunIdx) {
-			eventsToRun[i]();
-			eventsToRun[i] = null;
-		}
-
-		// Some events were executed. They could add new events to run.
-		if(eventsToRunIdx > 0) {
-			nextEventAt = -2;
-		}
-		return {nextEventAt:nextEventAt, anyTime:hasPromisedEvents}
 	}
 
 }
